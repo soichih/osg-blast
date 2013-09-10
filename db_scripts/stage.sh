@@ -96,10 +96,14 @@ function publish_parts() {
         fi
         part=$((part+1)) 
     done
+
+    echo "outputing list file"
+    ls *.gz > $pubdir/list
     cd -
 
     echo "writing out blast.opt with some random numbers - please update!"
     echo "-dbsize 11222333444" >> $pubdir/blast.opt
+
 }
 
 download
