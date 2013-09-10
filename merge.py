@@ -5,7 +5,7 @@ import sys
 import os
 import glob
 
-max_target_seqs=100 #default is 500 in blast - need to match with blast.opt
+max_target_seqs=50 #default is 500 in blast - need to match with blast.opt
 
 #http://biopython.org/DIST/docs/tutorial/Tutorial.html#htoc82
 #from Bio.Blast import NCBIXML

@@ -6,19 +6,20 @@ import time
 import shutil
 import glob
 
-if len(sys.argv) != 6:
+if len(sys.argv) != 7:
     print "#arg: project_name db queries blast_type \"blast_opt\""
     sys.exit(1)
 
 project=sys.argv[1]
 dbname=sys.argv[2]
-query_path=sys.argv[3]
-blast_type=sys.argv[4]
-user_blast_opt=sys.argv[5]
+dbver=sys.argv[3]
+query_path=sys.argv[4]
+blast_type=sys.argv[5]
+user_blast_opt=sys.argv[6]
 
 block_size=412
 
-db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname
+db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
 blast_bin = "/home/hayashis/app/ncbi-blast-2.2.28+/bin"
 rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
 if os.path.exists(rundir):
@@ -77,6 +78,7 @@ db_blast_opt = file(db_dir+"/blast.opt", "r").read().strip()
 blast_opt = file(rundir+"/blast.opt", "w")
 blast_opt.write(db_blast_opt)
 blast_opt.write(" "+user_blast_opt)
+#blast_opt.write(" -max_target_seqs 500")
 blast_opt.close()
 
 #output condor submit file for running blast
@@ -95,8 +97,8 @@ for query_block in os.listdir(inputdir):
     #sub.write("request_disk = 256000\n\n") #in kilobytes
 
     #per derek.. to restart long running jobs 
-    sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n")
-    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 9000 ) && JobStatus == 2\n") #9000 should be enough for 412 queries
+    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 9000 ) && JobStatus == 2\n") #should be enough for 412 queries
+    sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 30 )\n") #release after 30 seconds
 
     #sub.write("periodic_remove = (CommittedTime - CommittedSuspensionTime) > 7200\n") #not sure if this works
 
@@ -116,7 +118,7 @@ for query_block in os.listdir(inputdir):
     #TODO - I should probably compress blast executable and input query block?
     sub.write(
         "transfer_input_files = "+blast_bin+"/"+blast_type+","+
-        "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"/"+dbname+".$(Process).tar.gz,"+
+        "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver+"/"+dbname+".$(Process).tar.gz,"+
         "blast.opt,"+
         "input/"+query_block+"\n")
     sub.write("arguments = "+blast_type+" "+query_block+" "+dbname+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
