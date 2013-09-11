@@ -3,25 +3,19 @@
 blast_type=$1
 query_path=$2
 db=$3
-part=$4
-output_path=$5
+dburl=$4
+part=$5
+output_path=$6
 blast_opt=`cat blast.opt`
 
 echo `date` ": running on" `hostname`
-env | grep OSG
+env
+
+echo "downloading blastdb"
+time curl -O $dburl/$db.$part.tar.gz
 
 echo "unzipping blastdb"
-tar -xzf $db.$part.tar.gz
-
-#echo "running makeblastdb"
-#chmod +x makeblastdb
-#./makeblastdb -in $part -dbtype prot -out db #-hash_index
-#-parse_seqids #this breaks makeblastdb if run on db segment
-#ret=$?
-#if [ ! $ret -eq 0 ]; then
-#    echo "failed to create blastdb.."
-#    exit 1
-#fi
+time tar -xzf $db.$part.tar.gz
 
 echo "checking"
 ls -la .

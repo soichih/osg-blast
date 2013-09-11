@@ -4,7 +4,8 @@ import sys
 import os
 import time
 import shutil
-import glob
+import urllib
+import re
 
 if len(sys.argv) != 7:
     print "#arg: project_name db queries blast_type \"blast_opt\""
@@ -17,17 +18,19 @@ query_path=sys.argv[4]
 blast_type=sys.argv[5]
 user_blast_opt=sys.argv[6]
 
-block_size=412
+block_size=412 #adjust this so that most job will run for 1 - 2 hours
 
-db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
 blast_bin = "/home/hayashis/app/ncbi-blast-2.2.28+/bin"
-rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
+#db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
+db_path = "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver
+rundir = "/usr/local/tmp/rundir/"+str(time.time())
+
+#create rundir
 if os.path.exists(rundir):
     print "#rundir already exists.."
     sys.exit(1)
 else:
     os.makedirs(rundir)
-
 os.mkdir(rundir+"/log")
 os.mkdir(rundir+"/output")
 
@@ -69,12 +72,24 @@ for query in queries:
 if outfile:
     outfile.close()
 
-dbparts = glob.glob(db_dir+"/*.gz")
+#list *.gz on the db_path
+con = urllib.urlopen(db_path+"/list")
+html = con.read()
+con.close()
+dbparts = []
+for part in html.split("\n"):
+    if part == "": 
+        continue
+    dbparts.append(part)
+
+print "#number of db parts", len(dbparts)
 
 #I don't know how to pass double quote escaped arguments via condor arguemnts option
 #so let's pass via writing out to file.
 #we need to concat user blast opt to db blast opt
-db_blast_opt = file(db_dir+"/blast.opt", "r").read().strip()
+con = urllib.urlopen(db_path+"/blast.opt")
+db_blast_opt = con.read().strip()
+con.close()
 blast_opt = file(rundir+"/blast.opt", "w")
 blast_opt.write(db_blast_opt)
 blast_opt.write(" "+user_blast_opt)
@@ -87,7 +102,8 @@ for query_block in os.listdir(inputdir):
 
     sub_name = query_block+".sub"
     sub = open(rundir+"/"+sub_name, "w")
-    sub.write("universe = vanilla\n")
+    #sub.write("universe = vanilla\n") #for osg-xsede
+    sub.write("universe = grid\n") #on bosco submit node (soichi6)
     sub.write("notification = never\n")
     sub.write("ShouldTransferFiles = YES\n")
     sub.write("when_to_transfer_output = ON_EXIT\n\n")
@@ -118,10 +134,10 @@ for query_block in os.listdir(inputdir):
     #TODO - I should probably compress blast executable and input query block?
     sub.write(
         "transfer_input_files = "+blast_bin+"/"+blast_type+","+
-        "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver+"/"+dbname+".$(Process).tar.gz,"+
         "blast.opt,"+
         "input/"+query_block+"\n")
-    sub.write("arguments = "+blast_type+" "+query_block+" "+dbname+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
+    dburl = "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver
+    sub.write("arguments = "+blast_type+" "+query_block+" "+dbname+" "+dburl+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
 
     sub.write("queue "+str(len(dbparts))+"\n")
     sub.close()

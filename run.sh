@@ -24,9 +24,9 @@
 
 #./setup.py OSG-Staff nr ../sample/query.trinity.10000.txt blastp "-outfmt 5"
 tmpfile=/tmp/run.sh.$RANDOM
-./setup.py IU-GALAXY nr "09-09-2013" ../sample/query.trinity.1.txt blastx "-evalue 0.5" > $tmpfile
+./setup.py IU-GALAXY nr "09-09-2013" sample/nr.100 blastx "-evalue 0.5" > $tmpfile
 cat $tmpfile
-bash $tmpfile
+#bash $tmpfile
 
 #echo "submitting"
 #condor_submit block_0.sub
