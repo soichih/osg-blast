@@ -20,7 +20,7 @@ user_blast_opt=sys.argv[6]
 
 block_size=412 #adjust this so that most job will run for 1 - 2 hours
 
-blast_bin = "/home/hayashis/app/ncbi-blast-2.2.28+/bin"
+blast_bin = "/usr/local/ncbi-blast-2.2.28+/bin"
 #db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
 db_path = "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver
 rundir = "/usr/local/tmp/rundir/"+str(time.time())
@@ -112,8 +112,8 @@ for query_block in os.listdir(inputdir):
     #sub.write("request_memory = 500\n\n") #in megabytes
     #sub.write("request_disk = 256000\n\n") #in kilobytes
 
-    #per derek.. to restart long running jobs 
-    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 9000 ) && JobStatus == 2\n") #should be enough for 412 queries
+    #per derek.. to restart long running jobs .. 412 queries should be process in 20-30 minutes range (sometimes 50min..) kill at 60 minutes
+    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 3600) && JobStatus == 2\n") 
     sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 30 )\n") #release after 30 seconds
 
     #sub.write("periodic_remove = (CommittedTime - CommittedSuspensionTime) > 7200\n") #not sure if this works
@@ -128,7 +128,7 @@ for query_block in os.listdir(inputdir):
     sub.write("output = log/"+query_block+".part_$(Process).out\n")
     sub.write("error = log/"+query_block+".part_$(Process).err\n")
     sub.write("log = log/"+query_block+".log\n")
-    sub.write("+ProjectName = \""+project+"\"\n")
+    sub.write("+ProjectName = \""+project+"\"\n") #only works if submitted directly on osg-xsede (use ~/.xsede_default_project instead)
     sub.write("transfer_output_files = output\n");
 
     #TODO - I should probably compress blast executable and input query block?

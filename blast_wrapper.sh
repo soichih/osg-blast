@@ -12,7 +12,7 @@ echo `date` ": running on" `hostname`
 env
 
 echo "downloading blastdb"
-time curl -O $dburl/$db.$part.tar.gz
+time curl -H "Pragma:" -O $dburl/$db.$part.tar.gz
 
 echo "unzipping blastdb"
 time tar -xzf $db.$part.tar.gz
@@ -24,7 +24,7 @@ echo "running blast" `date`
 mkdir output
 dbname=$db.`printf "%02d" $part`
 echo "./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5"
-./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
+time ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
 echo `date` ":blast ended at" `date` "ret:$blast_ret"
 case $blast_ret in
