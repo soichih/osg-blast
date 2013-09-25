@@ -20,10 +20,14 @@ user_blast_opt=sys.argv[6]
 
 block_size=412 #adjust this so that most job will run for 1 - 2 hours
 
-blast_bin = "/usr/local/ncbi-blast-2.2.28+/bin"
+#blast_bin = "/N/soft/rhel6/ncbi-blast+/2.2.28/bin" #doesn't work -- executable compiled using locally available libs
+#blast_bin = "/N/u/iugalaxy/Mason/soichi/ncbi-blast-2.2.28+/bin"
+
+#blast_bin = "/usr/local/ncbi-blast-2.2.28+/bin"
 #db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
-db_path = "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver
-rundir = "/usr/local/tmp/rundir/"+str(time.time())
+db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
+bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
+rundir = "/N/dcwan/scratch/iugalaxy/rundir/"+str(time.time())
 
 #create rundir
 if os.path.exists(rundir):
@@ -82,7 +86,7 @@ for part in html.split("\n"):
         continue
     dbparts.append(part)
 
-print "#number of db parts", len(dbparts)
+#print "#number of db parts", len(dbparts)
 
 #I don't know how to pass double quote escaped arguments via condor arguemnts option
 #so let's pass via writing out to file.
@@ -93,7 +97,11 @@ con.close()
 blast_opt = file(rundir+"/blast.opt", "w")
 blast_opt.write(db_blast_opt)
 blast_opt.write(" "+user_blast_opt)
-#blast_opt.write(" -max_target_seqs 500")
+
+#500 will cause memory usage issue with merge.py
+#TODO - update on merge.py as well to match this (should be configurable..)
+blast_opt.write(" -max_target_seqs 20") 
+
 blast_opt.close()
 
 #output condor submit file for running blast
@@ -115,6 +123,7 @@ for query_block in os.listdir(inputdir):
     #per derek.. to restart long running jobs .. 412 queries should be process in 20-30 minutes range (sometimes 50min..) kill at 60 minutes
     sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 3600) && JobStatus == 2\n") 
     sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 30 )\n") #release after 30 seconds
+    sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n") #stay in queue on failures
 
     #sub.write("periodic_remove = (CommittedTime - CommittedSuspensionTime) > 7200\n") #not sure if this works
 
@@ -132,12 +141,8 @@ for query_block in os.listdir(inputdir):
     sub.write("transfer_output_files = output\n");
 
     #TODO - I should probably compress blast executable and input query block?
-    sub.write(
-        "transfer_input_files = "+blast_bin+"/"+blast_type+","+
-        "blast.opt,"+
-        "input/"+query_block+"\n")
-    dburl = "http://osg-xsede.grid.iu.edu/scratch/hayashis/blastdb/"+dbname+"."+dbver
-    sub.write("arguments = "+blast_type+" "+query_block+" "+dbname+" "+dburl+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
+    sub.write("transfer_input_files = blast.opt,input/"+query_block+"\n")
+    sub.write("arguments = "+bin_path+" "+blast_type+" "+query_block+" "+dbname+" "+db_path+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
 
     sub.write("queue "+str(len(dbparts))+"\n")
     sub.close()
@@ -163,8 +168,9 @@ for query_block in os.listdir(inputdir):
     dag.write("RETRY "+query_block+" 10\n")
     dag.write("JOB "+query_block+".merge "+msub_name+"\n")
     dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
+    dag.write("RETRY "+query_block+" 3\n")
 
 dag.close()
 
-print "#Run workflow by executing.."
-print "cd "+rundir+" && condor_submit_dag blast.dag && condor_wait blast.dag.dagman.log"
+#output rundir
+print rundir

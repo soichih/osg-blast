@@ -4,8 +4,10 @@ import libxml2
 import sys
 import os
 import glob
+import resource
+import gzip
 
-max_target_seqs=50 #default is 500 in blast - need to match with blast.opt
+max_target_seqs=20 #default is 500 in blast - need to match with blast.opt
 
 #http://biopython.org/DIST/docs/tutorial/Tutorial.html#htoc82
 #from Bio.Blast import NCBIXML
@@ -20,7 +22,7 @@ template_doc = None
 queries = {}
 part=0
 while True:
-    path = "output/"+blockname+".part_"+str(part)+".result"
+    path = "output/"+blockname+".part_"+str(part)+".result.gz"
     if not os.path.exists(path):
         break 
 
@@ -33,7 +35,12 @@ while True:
     #print "loading query:",query_id,"db:",db_id
     print "loading",path
 
-    doc = libxml2.parseFile(path)
+    #doc = libxml2.parseFile(path)
+
+    xml_file = gzip.open(path, "rw")
+    xml = xml_file.read() 
+    doc = libxml2.parseDoc(xml)
+    xml_file.close()
 
     #use first doc as template
     if template_doc == None:
@@ -48,6 +55,7 @@ while True:
         else:
             queries[query_id].append(iteration)
 
+    usage = resource.getrusage(resource.RUSAGE_SELF)
     part+=1
 
 if template_doc == None:
@@ -133,4 +141,13 @@ f = open(outpath, "w")
 template_doc.saveTo(f)
 f.close()
 
+#remove all original results for this block (to save diskspace)
+#part=0
+#while True:
+#    path = "output/"+blockname+".part_"+str(part)+".result"
+#    if not os.path.exists(path):
+#        break 
+#    echo "removing",path
+#    os.remove(path)
+#    part+=1
 

@@ -22,15 +22,19 @@
 #BLAST OPTION WILL BE CARRIED TO THE ACTUAL COMMAND EXECUTED ON EACH CLUSTER
 #NEVER COPY WHAT USER PROVIDES VIA GUI!!!!!!!!!!!!!!!!!!!!!!
 
-#./setup.py OSG-Staff nr ../sample/query.trinity.10000.txt blastp "-outfmt 5"
-tmpfile=/tmp/run.sh.$RANDOM
-#./setup.py IU-GALAXY nr "09-09-2013" sample/nr.1000 blastx "-evalue 0.5" > $tmpfile
-./setup.py IU-GALAXY nr "09-09-2013" sample/nr.1000 blastx "-evalue 0.5" > $tmpfile
-cat $tmpfile
-time bash $tmpfile
+source ~/bosco/bosco_setenv
+bosco_start
+echo "making sure condor starts up"
+sleep 2
 
-#echo "submitting"
-#condor_submit block_0.sub
+#rundir=`./setup.py IU-GALAXY nr 09-09-2013 sample/nr.38142 blastx '-evalue 0.5'`
+rundir=`./setup.py IU-GALAXY nt 09-19-2013 sample/nr.5000 blastx '-evalue 0.5'`
+echo "rundir:" $rundir
+cd $rundir
+condor_submit_dag blast.dag
+time condor_wait blast.dag.dagman.log
+echo "ret:" $?
 
-#blast xml output can be merged used a script like
-#https://bitbucket.org/peterjc/galaxy-central/src/5cefd5d5536e/tools/ncbi_blast_plus/blast.py
+echo "dag completed - listing output"
+ls -la output/*.xml
+
