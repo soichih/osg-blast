@@ -1,6 +1,7 @@
 #!/bin/bash
 
 dbname=nr
+#dbname=nt
 #dbname=sts
 #num_per_part=250000
 
@@ -59,7 +60,7 @@ function makefulldb() {
     dbpath=$tmpdir/$dbname.db
     rm -rf $dbpath
     mkdir -p $dbpath
-    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype prot -out $dbpath/$dbname -max_file_sz "200MB" -parse_seqids -hash_index
+    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype prot -out $dbpath/$dbname -max_file_sz "400MB" -parse_seqids -hash_index
     export BLASTDB=$dbpath
     echo "running blastdbcmd to get db size"
     $blastbin/blastdbcmd -db $dbname -info
@@ -76,7 +77,7 @@ function makedb() {
 }
 
 function publish_parts() {
-    pubdir=/local-scratch/public_html/hayashis/blastdb/$dbname
+    pubdir=/local-scratch/public_html/iugalaxy/blastdb/$dbname
     echo "tarring db parts and publishing to " $pubdir
     rm -rf $pubdir
     mkdir -p $pubdir
@@ -98,7 +99,7 @@ function publish_parts() {
     done
 
     echo "outputing list file"
-    ls *.gz > $pubdir/list
+    ls $pubdir/*.gz > $pubdir/list
     cd -
 
     echo "writing out blast.opt with some random numbers - please update!"
