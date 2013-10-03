@@ -6,6 +6,7 @@ import time
 import shutil
 import urllib
 import re
+import socket
 
 if len(sys.argv) != 7:
     print "#arg: project_name db queries blast_type \"blast_opt\""
@@ -18,16 +19,15 @@ query_path=sys.argv[4]
 blast_type=sys.argv[5]
 user_blast_opt=sys.argv[6]
 
-block_size=412 #adjust this so that most job will run for 1 - 2 hours
+#200 is too large for nt, and I can't reduce the size of db part for NT any further - due to merge.py running out of memory
+#100 is too small fr 70k jobs.. creates too many jobs
+block_size=200 
 
-#blast_bin = "/N/soft/rhel6/ncbi-blast+/2.2.28/bin" #doesn't work -- executable compiled using locally available libs
-#blast_bin = "/N/u/iugalaxy/Mason/soichi/ncbi-blast-2.2.28+/bin"
-
-#blast_bin = "/usr/local/ncbi-blast-2.2.28+/bin"
-#db_dir = "/local-scratch/public_html/hayashis/blastdb/"+dbname+"."+dbver
 db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
-rundir = "/N/dcwan/scratch/iugalaxy/rundir/"+str(time.time())
+
+#rundir = "/N/dcwan/scratch/iugalaxy/rundir/"+str(time.time())
+rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
 
 #create rundir
 if os.path.exists(rundir):
@@ -110,20 +110,27 @@ for query_block in os.listdir(inputdir):
 
     sub_name = query_block+".sub"
     sub = open(rundir+"/"+sub_name, "w")
-    #sub.write("universe = vanilla\n") #for osg-xsede
-    sub.write("universe = grid\n") #on bosco submit node (soichi6)
+
+    if socket.gethostname() == "osg-xsede.grid.iu.edu":
+        sub.write("#for osg-xsede\n")
+        sub.write("universe = vanilla\n") #for osg-xsede
+    else:
+        sub.write("universe = grid\n") #on bosco submit node (soichi6)
+
     sub.write("notification = never\n")
     sub.write("ShouldTransferFiles = YES\n")
-    sub.write("when_to_transfer_output = ON_EXIT\n\n")
+    sub.write("when_to_transfer_output = ALWAYS\n\n") #as oppose to ON_EXIT
 
     #not sure if this helps or not..
     #sub.write("request_memory = 500\n\n") #in megabytes
     #sub.write("request_disk = 256000\n\n") #in kilobytes
 
-    #per derek.. to restart long running jobs .. 412 queries should be process in 20-30 minutes range (sometimes 50min..) kill at 60 minutes
-    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 3600) && JobStatus == 2\n") 
-    sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 30 )\n") #release after 30 seconds
-    sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n") #stay in queue on failures
+    ##Serguei says this has been fixed (goc ticket 17246)
+    #sub.write("Requirements = (GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") \n") #NWICG_NDCMS has curl access issue currently 10/1/2013
+
+    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 10800) && JobStatus == 2\n")  #max 3 hours
+    sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n") #release after 60 seconds
+    sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n\n") #stay in queue on failures
 
     #sub.write("periodic_remove = (CommittedTime - CommittedSuspensionTime) > 7200\n") #not sure if this works
 
@@ -134,17 +141,20 @@ for query_block in os.listdir(inputdir):
     #    Code 5 Subcode 0
 
     sub.write("executable = blast_wrapper.sh\n")
-    sub.write("output = log/"+query_block+".part_$(Process).out\n")
-    sub.write("error = log/"+query_block+".part_$(Process).err\n")
+    sub.write("output = log/"+query_block+".part_$(Process).cluster_$(Cluster).out\n")
+    sub.write("error = log/"+query_block+".part_$(Process).cluster_$(Cluster).err\n")
     sub.write("log = log/"+query_block+".log\n")
     sub.write("+ProjectName = \""+project+"\"\n") #only works if submitted directly on osg-xsede (use ~/.xsede_default_project instead)
     sub.write("transfer_output_files = output\n");
 
     #TODO - I should probably compress blast executable and input query block?
     sub.write("transfer_input_files = blast.opt,input/"+query_block+"\n")
-    sub.write("arguments = "+bin_path+" "+blast_type+" "+query_block+" "+dbname+" "+db_path+" $(Process) output/"+query_block+".part_$(Process).result\n\n");
+    sub.write("arguments = "+bin_path+" "+blast_type+" "+query_block+" "+dbname+" "+db_path+" $(Process) output/"+query_block+".part_$(Process).result\n");
 
-    sub.write("queue "+str(len(dbparts))+"\n")
+    #description to make condor_q looks a bit nicer
+    sub.write("+Description = \""+blast_type+" "+dbname+" "+query_block+".part_$(Process)\"\n")
+
+    sub.write("\nqueue "+str(len(dbparts))+"\n")
     sub.close()
 
     #copy blast_wrapper.sh
@@ -152,6 +162,9 @@ for query_block in os.listdir(inputdir):
 
     #copy merge.py
     shutil.copy("merge.py", rundir)
+
+    #copy dagman config
+    shutil.copy("dagman.config", rundir)
 
     msub_name = query_block+".merge.sub"
     msub = open(rundir+"/"+msub_name, "w")
@@ -164,6 +177,7 @@ for query_block in os.listdir(inputdir):
     msub.write("log = log/"+query_block+".merge.log\n")
     msub.write("queue\n")
 
+    dag.write("CONFIG dagman.config\n")
     dag.write("JOB "+query_block+" "+sub_name+"\n")
     dag.write("RETRY "+query_block+" 10\n")
     dag.write("JOB "+query_block+".merge "+msub_name+"\n")

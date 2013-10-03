@@ -1,7 +1,11 @@
 #!/bin/bash
 
 dbname=nr
+dbpartsize="400M"
+
 #dbname=nt
+#dbpartsize="200M"
+
 #dbname=sts
 #num_per_part=250000
 
@@ -60,7 +64,7 @@ function makefulldb() {
     dbpath=$tmpdir/$dbname.db
     rm -rf $dbpath
     mkdir -p $dbpath
-    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype prot -out $dbpath/$dbname -max_file_sz "400MB" -parse_seqids -hash_index
+    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype prot -out $dbpath/$dbname -max_file_sz $dbpartsize -parse_seqids -hash_index
     export BLASTDB=$dbpath
     echo "running blastdbcmd to get db size"
     $blastbin/blastdbcmd -db $dbname -info

@@ -22,13 +22,21 @@
 #BLAST OPTION WILL BE CARRIED TO THE ACTUAL COMMAND EXECUTED ON EACH CLUSTER
 #NEVER COPY WHAT USER PROVIDES VIA GUI!!!!!!!!!!!!!!!!!!!!!!
 
-source ~/bosco/bosco_setenv
-bosco_start
-echo "making sure condor starts up"
-sleep 2
+#source ~/bosco/bosco_setenv
+#bosco_start
+#echo "making sure condor starts up"
+#sleep 2
 
-#rundir=`./setup.py IU-GALAXY nr 09-09-2013 sample/nr.38142 blastx '-evalue 0.5'`
-rundir=`./setup.py IU-GALAXY nt 09-19-2013 sample/nr.5000 blastx '-evalue 0.5'`
+#nr
+rundir=`./setup.py IU-GALAXY nr latest sample/nr.70937 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.38142 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.5000 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.1000 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.100 blastx '-evalue 0.5'`
+
+#nt
+#rundir=`./setup.py IU-GALAXY nt latest sample/nr.1000 blastx '-evalue 0.5'`
+
 echo "rundir:" $rundir
 cd $rundir
 condor_submit_dag blast.dag

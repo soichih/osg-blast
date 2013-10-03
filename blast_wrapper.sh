@@ -9,8 +9,12 @@ part=$6
 output_path=$7
 blast_opt=`cat blast.opt`
 
-echo `date` ": running on" `hostname`
+echo "creating output directory"
+mkdir output
+
+echo `date` ": running on" `hostname` `uname -a`
 env
+cat /etc/issue
 
 export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
 if [ "$OSG_SQUID_LOCATION" != UNAVAILABLE ]; then
@@ -32,27 +36,46 @@ fi
 
 ###################################################################################################
 
-echo "downloading & unzipping blast bin"
-time 2>&1 curl -m 60 -H "Pragma:" -O $blast_path/$blast_type.gz
+echo "downloading blast bin"
+time 2>&1 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
+if [ $? -ne 0 ]; then
+    echo "download failed through squid.. trying without it"
+    unset http_proxy
+    time 2>&1 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
+    if [ $? -ne 0 ]; then
+        echo "failed again.. exiting"
+        exit 1
+    fi
+fi
+
+echo "unzipping blast bin"
 gunzip $blast_type.gz
+if [ $? -ne 0 ]; then
+    echo "failed to unzip blast.gz - dumping content for debug.."
+    cat $blast_type.gz
+    exit 1
+fi
 chmod +x $blast_type
 
-echo "downloading blastdb"
-time 2>&1 curl -m 300 -H "Pragma:" -O $dburl/$db.$part.tar.gz
+echo "downloading blastdb" 
+time 2>&1 curl -m 2400 -H "Pragma:" -O $dburl/$db.$part.tar.gz #40 minutes is way too long.. but some sites are very slow
+if [ $? -ne 0 ]; then
+    echo "failed to download db.. exiting"
+    exit 1
+fi
 
 echo "unzipping blastdb"
 time 2>&1 tar -xzf $db.$part.tar.gz 2>&1
 
-echo "checking"
+#debug..
 ls -la .
 
-echo "running blast" `date`
-mkdir output
+echo "starting blast at" `date`
 dbname=$db.`printf "%02d" $part`
 echo "./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5"
 time 2>&1 ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
-echo `date` ":blast ended at" `date` "ret:$blast_ret"
+echo "blast ended at" `date` "ret:$blast_ret"
 case $blast_ret in
 0)
     echo "success"

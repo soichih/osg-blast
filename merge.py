@@ -142,12 +142,12 @@ template_doc.saveTo(f)
 f.close()
 
 #remove all original results for this block (to save diskspace)
-#part=0
-#while True:
-#    path = "output/"+blockname+".part_"+str(part)+".result"
-#    if not os.path.exists(path):
-#        break 
-#    echo "removing",path
-#    os.remove(path)
-#    part+=1
+part=0
+while True:
+    path = "output/"+blockname+".part_"+str(part)+".result.gz"
+    if not os.path.exists(path):
+        break 
+    print "removing",path
+    os.remove(path)
+    part+=1
 
