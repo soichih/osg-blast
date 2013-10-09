@@ -58,7 +58,7 @@ fi
 chmod +x $blast_type
 
 echo "downloading blastdb" 
-time 2>&1 curl -m 2400 -H "Pragma:" -O $dburl/$db.$part.tar.gz #40 minutes is way too long.. but some sites are very slow
+time 2>&1 curl -m 3000 -H "Pragma:" -O $dburl/$db.$part.tar.gz #50 minutes seems way too long.. but some sites are very slow (MTWT2..)
 if [ $? -ne 0 ]; then
     echo "failed to download db.. exiting"
     exit 1

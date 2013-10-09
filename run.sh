@@ -28,14 +28,17 @@
 #sleep 2
 
 #nr
-rundir=`./setup.py IU-GALAXY nr latest sample/nr.70937 blastx '-evalue 0.5'`
-#rundir=`./setup.py IU-GALAXY nr latest sample/nr.38142 blastx '-evalue 0.5'`
-#rundir=`./setup.py IU-GALAXY nr latest sample/nr.5000 blastx '-evalue 0.5'`
-#rundir=`./setup.py IU-GALAXY nr latest sample/nr.1000 blastx '-evalue 0.5'`
-#rundir=`./setup.py IU-GALAXY nr latest sample/nr.100 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.70937 blastx '-evalue 0.1'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.38142 blastx '-evalue 0.1'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.5000 blastx '-evalue 0.1'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.1000 blastx '-evalue 0.1'`
+#rundir=`./setup.py IU-GALAXY nr latest sample/nr.100 blastx '-evalue 0.1'`
 
 #nt
-#rundir=`./setup.py IU-GALAXY nt latest sample/nr.1000 blastx '-evalue 0.5'`
+#rundir=`./setup.py IU-GALAXY nt latest sample/nr.1000 blastn '-evalue 0.1'`
+
+#human_genomic
+rundir=`./setup.py IU-GALAXY human_genomic latest sample/human_genomic.89 blastn '-evalue 0.1'`
 
 echo "rundir:" $rundir
 cd $rundir

@@ -1,13 +1,16 @@
 #!/bin/bash
 
-dbname=nr
+#dbname=nr
+#dbpartsize="400M"
+#dbtype=prot
+
+dbname=nt
+dbtype=nucl
 dbpartsize="400M"
 
-#dbname=nt
-#dbpartsize="200M"
-
-#dbname=sts
-#num_per_part=250000
+#dbname=human_genomic
+#dbtype=nucl
+#dbpartsize="400M"
 
 tmpdir=/local-scratch/hayashis/tmp
 blastbin=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.28+/bin
@@ -64,7 +67,10 @@ function makefulldb() {
     dbpath=$tmpdir/$dbname.db
     rm -rf $dbpath
     mkdir -p $dbpath
-    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype prot -out $dbpath/$dbname -max_file_sz $dbpartsize -parse_seqids -hash_index
+    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype $dbtype -out $dbpath/$dbname -max_file_sz $dbpartsize -parse_seqids -hash_index
+}
+function showdbinfo() {
+    dbpath=$tmpdir/$dbname.db
     export BLASTDB=$dbpath
     echo "running blastdbcmd to get db size"
     $blastbin/blastdbcmd -db $dbname -info
@@ -92,8 +98,8 @@ function publish_parts() {
     while :
     do
         filepath=$dbname.`printf "%02d" $part`
-        if [ -e "$filepath.psq" ]
-        then
+        echo "testing $filepath"
+        if [ -e "$filepath.psq" ] || [ -e "$filepath.nsq" ] ; then
                 echo $filepath 
                 tar -cz $filepath.* > $pubdir/$dbname.$part.tar.gz
         else
@@ -111,12 +117,9 @@ function publish_parts() {
 
 }
 
-download
-check_md5
-unzip
+#download
+#check_md5
+#unzip
 makefulldb
 publish_parts
-
-#zipsplit
-#split
-#makedb
+showdbinfo
