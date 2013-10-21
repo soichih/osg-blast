@@ -8,7 +8,7 @@ import urllib
 import re
 import socket
 
-if len(sys.argv) != 7:
+if len(sys.argv) != 8:
     print "#arg: project_name db queries blast_type \"blast_opt\""
     sys.exit(1)
 
@@ -18,6 +18,7 @@ dbver=sys.argv[3]
 query_path=sys.argv[4]
 blast_type=sys.argv[5]
 user_blast_opt=sys.argv[6]
+rundir=sys.argv[7]
 
 #200 is too large for nt, and I can't reduce the size of db part for NT any further - due to merge.py running out of memory
 #100 is too small fr 70k jobs.. creates too many jobs
@@ -27,14 +28,14 @@ db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+db
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
 
 #rundir = "/N/dcwan/scratch/iugalaxy/rundir/"+str(time.time())
-rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
+#rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
 
 #create rundir
-if os.path.exists(rundir):
-    print "#rundir already exists.."
-    sys.exit(1)
-else:
-    os.makedirs(rundir)
+#if os.path.exists(rundir):
+#    print "#rundir already exists.."
+#    sys.exit(1)
+#else:
+#    os.makedirs(rundir)
 os.mkdir(rundir+"/log")
 os.mkdir(rundir+"/output")
 
