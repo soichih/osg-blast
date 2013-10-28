@@ -20,9 +20,7 @@ blast_type=sys.argv[5]
 user_blast_opt=sys.argv[6]
 rundir=sys.argv[7]
 
-#200 is too large for nt, and I can't reduce the size of db part for NT any further - due to merge.py running out of memory
-#100 is too small fr 70k jobs.. creates too many jobs
-block_size=200 
+block_size=400
 
 db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
@@ -107,6 +105,7 @@ blast_opt.close()
 
 #output condor submit file for running blast
 dag = open(rundir+"/blast.dag", "w")
+merge_subs = []
 for query_block in os.listdir(inputdir):
 
     sub_name = query_block+".sub"
@@ -128,6 +127,8 @@ for query_block in os.listdir(inputdir):
 
     ##Serguei says this has been fixed (goc ticket 17246)
     #sub.write("Requirements = (GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") \n") #NWICG_NDCMS has curl access issue currently 10/1/2013
+
+    sub.write("Requirements = (GLIDEIN_ResourceName =!= \"cinvestav\") \n") #cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
 
     sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 10800) && JobStatus == 2\n")  #max 3 hours
     sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n") #release after 60 seconds
@@ -184,6 +185,24 @@ for query_block in os.listdir(inputdir):
     dag.write("JOB "+query_block+".merge "+msub_name+"\n")
     dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
     dag.write("RETRY "+query_block+" 3\n")
+ 
+    merge_subs.append(query_block)
+
+#output final.sub
+fsub_name = "final.sub"
+fsub = open(rundir+"/"+fsub_name, "w")
+fsub.write("universe = local\n")
+fsub.write("notification = never\n")
+fsub.write("executable = merge_final.py\n")
+fsub.write("arguments = "+rundir+"\n")
+fsub.write("output = log/final.out\n")
+fsub.write("error = log/final.err\n")
+fsub.write("log = log/final.log\n")
+fsub.write("queue\n")
+
+dag.write("JOB final final.sub\n")
+dag.write("PARENT "+" ".join(merge_subs)+" CHILD final\n")
+dag.write("RETRY final 3\n")
 
 dag.close()
 

@@ -37,11 +37,11 @@ fi
 ###################################################################################################
 
 echo "downloading blast bin"
-time 2>&1 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
+curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
 if [ $? -ne 0 ]; then
     echo "download failed through squid.. trying without it"
     unset http_proxy
-    time 2>&1 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
+    curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
     if [ $? -ne 0 ]; then
         echo "failed again.. exiting"
         exit 1
@@ -65,7 +65,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "unzipping blastdb"
-time 2>&1 tar -xzf $db.$part.tar.gz 2>&1
+tar -xzf $db.$part.tar.gz 2>&1
 
 #debug..
 ls -la .
