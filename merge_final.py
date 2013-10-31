@@ -21,14 +21,27 @@ output_dir = sys.argv[1]
 
 output_path = output_dir+"/merged.xml"
 output = open(output_path, "w")
+print "final output:",output_path
 
 count = 0 #start with block 0
 while True:
 	path = output_dir+"/block_"+str(count)+".merged.xml"
-	if not os.path.exists(path):
-		break
+	if os.path.exists(path):
+		handle = open(path, "r")
+	else:
+		#try userdb (pre-merged) content"
+		#path = output_dir+"/block_"+str(count)+".result.gz"
+		path_gz = output_dir+"/block_"+str(count)+".result.gz"
+		path = output_dir+"/block_"+str(count)+".result"
+		if os.path.exists(path_gz):
+			#python gzip.open() / readline is slow.. just unzip first
+			os.system("gunzip "+path_gz)
+			#handle = gzip.open(path, "r")
+			handle = open(path, "r")
+		else:
+			break #failed to find - stop
+	print "loading",path
 
-	handle = open(path, "r")
         header = handle.readline()
         if not header:
             raise Exception("BLAST XML file '%s' was empty" % path)
@@ -54,14 +67,20 @@ while True:
         elif old_header[:300] != header[:300]:
             raise Exception("BLAST XML headers don't match" % path)
         else: output.write("    <Iteration>\n")
+	#print "loading iterations"
         for line in handle:
-            if "</BlastOutput_iterations>" in line: break
+            #if "</BlastOutput_iterations>" in line: break
+            if line.find("</BlastOutput_iterations>") != -1: 
+	    	break
             output.write(line)
+	#print "done loading iterations"
 
+	handle.close()
 
+	os.remove(path)
 	count+=1
 
 output.write("</BlastOutput_iterations>\n")
 output.write("</BlastOutput>\n\n")
 output.flush()
-
+output.close()

@@ -2,12 +2,11 @@
 
 blast_path=$1
 blast_type=$2
-query_path=$3
-db=$4
-dburl=$5
-part=$6
-output_path=$7
+part=$3
+output_path=$4
+
 blast_opt=`cat blast.opt`
+query_path=block_$part
 
 echo "creating output directory"
 mkdir output
@@ -57,23 +56,15 @@ if [ $? -ne 0 ]; then
 fi
 chmod +x $blast_type
 
-echo "downloading blastdb" 
-time 2>&1 curl -m 3000 -H "Pragma:" -O $dburl/$db.$part.tar.gz #50 minutes seems way too long.. but some sites are very slow (MTWT2..)
-if [ $? -ne 0 ]; then
-    echo "failed to download db.. exiting"
-    exit 1
-fi
-
 echo "unzipping blastdb"
-tar -xzf $db.$part.tar.gz 2>&1
+tar -xzf db.tar.gz 2>&1
 
 #debug..
 ls -la .
 
 echo "starting blast at" `date`
-dbname=$db.`printf "%02d" $part`
-echo "./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5"
-time 2>&1 ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
+echo "./$blast_type $blast_opt -db user -query $query_path -out $output_path -outfmt 5"
+time 2>&1 ./$blast_type $blast_opt -db user -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
 echo "blast ended at" `date` "ret:$blast_ret"
 case $blast_ret in

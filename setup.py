@@ -164,6 +164,7 @@ for query_block in os.listdir(inputdir):
 
     #copy merge.py
     shutil.copy("merge.py", rundir)
+    shutil.copy("merge_final.py", rundir)
 
     #copy dagman config
     shutil.copy("dagman.config", rundir)
@@ -194,7 +195,7 @@ fsub = open(rundir+"/"+fsub_name, "w")
 fsub.write("universe = local\n")
 fsub.write("notification = never\n")
 fsub.write("executable = merge_final.py\n")
-fsub.write("arguments = "+rundir+"\n")
+fsub.write("arguments = "+rundir+"/output\n")
 fsub.write("output = log/final.out\n")
 fsub.write("error = log/final.err\n")
 fsub.write("log = log/final.log\n")
