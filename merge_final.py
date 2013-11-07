@@ -26,6 +26,7 @@ print "final output:",output_path
 count = 0 #start with block 0
 while True:
 	path = output_dir+"/block_"+str(count)+".merged.xml"
+	#print "testing",path
 	if os.path.exists(path):
 		handle = open(path, "r")
 	else:
@@ -40,7 +41,7 @@ while True:
 			handle = open(path, "r")
 		else:
 			break #failed to find - stop
-	print "loading",path
+	print "processing",path
 
         header = handle.readline()
         if not header:
@@ -80,7 +81,15 @@ while True:
 	os.remove(path)
 	count+=1
 
-output.write("</BlastOutput_iterations>\n")
-output.write("</BlastOutput>\n\n")
+if count > 0:
+	#output the tail
+	output.write("</BlastOutput_iterations>\n")
+	output.write("</BlastOutput>\n\n")
+else:
+	print "Couldn't find any blast results to merge.."
+	sys.exit(1)
+
 output.flush()
 output.close()
+
+

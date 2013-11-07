@@ -8,15 +8,16 @@ import urllib
 import re
 import socket
 
-if len(sys.argv) != 6:
-    print "#arg: project_name queries blast_type \"blast_opt\""
+if len(sys.argv) != 7:
+    print "incorrect number of arguments"
     sys.exit(1)
 
-project=sys.argv[1]
-query_path=sys.argv[2]
-blast_type=sys.argv[3]
-user_blast_opt=sys.argv[4]
-rundir=sys.argv[5]
+portalid=sys.argv[1]
+project=sys.argv[2]
+query_path=sys.argv[3]
+blast_type=sys.argv[4]
+user_blast_opt=sys.argv[5]
+rundir=sys.argv[6]
 
 #TODO - need to adjust this based on the size of the input db.. user provided db tends to be small..
 block_size=5000
@@ -112,7 +113,10 @@ sub.write("executable = blast_wrapper_userdb.sh\n")
 sub.write("output = log/block__$(Process).cluster_$(Cluster).out\n")
 sub.write("error = log/block_$(Process).cluster_$(Cluster).err\n")
 sub.write("log = log/query.log\n")
+
 sub.write("+ProjectName = \""+project+"\"\n") #only works if submitted directly on osg-xsede (use ~/.xsede_default_project instead)
+sub.write("+PortalUser = \""+portalid+"\"\n") 
+
 sub.write("transfer_output_files = output\n");
 
 #TODO - I should probably compress blast executable and input query block?

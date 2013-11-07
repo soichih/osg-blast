@@ -35,6 +35,17 @@ fi
 
 ###################################################################################################
 
+function clean_workdir {
+	echo "cleaning up workdir"
+	rm blastdb.*
+	rm db.tar.gz
+	rm $blast_type
+	rm $query_path
+
+	echo "after clean up.."
+	ls -la .
+}
+
 echo "downloading blast bin"
 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
 if [ $? -ne 0 ]; then
@@ -43,6 +54,7 @@ if [ $? -ne 0 ]; then
     curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
     if [ $? -ne 0 ]; then
         echo "failed again.. exiting"
+	clean_workdir
         exit 1
     fi
 fi
@@ -52,21 +64,30 @@ gunzip $blast_type.gz
 if [ $? -ne 0 ]; then
     echo "failed to unzip blast.gz - dumping content for debug.."
     cat $blast_type.gz
+    clean_workdir
     exit 1
 fi
 chmod +x $blast_type
 
 echo "unzipping blastdb"
 tar -xzf db.tar.gz 2>&1
+if [ $? -ne 0 ]; then
+    echo "failed to untar blastdb"
+    clean_workdir
+    exit 1
+fi
 
 #debug..
 ls -la .
 
-echo "starting blast at" `date`
-echo "./$blast_type $blast_opt -db user -query $query_path -out $output_path -outfmt 5"
-time 2>&1 ./$blast_type $blast_opt -db user -query $query_path -out $output_path -outfmt 5
+echo `date` "starting blast"
+echo "./$blast_type $blast_opt -db blastdb -query $query_path -out $output_path -outfmt 5"
+time 2>&1 ./$blast_type $blast_opt -db blastdb -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
-echo "blast ended at" `date` "ret:$blast_ret"
+echo `date` "blast ended with code:$blast_ret"
+
+clean_workdir
+
 case $blast_ret in
 0)
     echo "success"

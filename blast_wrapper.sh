@@ -36,6 +36,16 @@ fi
 
 ###################################################################################################
 
+function clean_workdir {
+	echo "cleaning up workdir"
+	rm $db.*
+	rm $blast_type
+	rm $query_path
+
+	#echo "after clean up.."
+	#ls -la .
+}
+
 echo "downloading blast bin"
 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
 if [ $? -ne 0 ]; then
@@ -44,6 +54,7 @@ if [ $? -ne 0 ]; then
     curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
     if [ $? -ne 0 ]; then
         echo "failed again.. exiting"
+	clean_workdir
         exit 1
     fi
 fi
@@ -53,6 +64,7 @@ gunzip $blast_type.gz
 if [ $? -ne 0 ]; then
     echo "failed to unzip blast.gz - dumping content for debug.."
     cat $blast_type.gz
+    clean_workdir
     exit 1
 fi
 chmod +x $blast_type
@@ -61,21 +73,30 @@ echo "downloading blastdb"
 time 2>&1 curl -m 3000 -H "Pragma:" -O $dburl/$db.$part.tar.gz #50 minutes seems way too long.. but some sites are very slow (MTWT2..)
 if [ $? -ne 0 ]; then
     echo "failed to download db.. exiting"
+    clean_workdir
     exit 1
 fi
 
 echo "unzipping blastdb"
 tar -xzf $db.$part.tar.gz 2>&1
+if [ $? -ne 0 ]; then
+    echo "failed to untar blastdb.. exiting"
+    clean_workdir
+    exit 1
+fi
 
 #debug..
 ls -la .
 
-echo "starting blast at" `date`
+echo `date` "starting blast"
 dbname=$db.`printf "%02d" $part`
 echo "./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5"
 time 2>&1 ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
-echo "blast ended at" `date` "ret:$blast_ret"
+echo `date` "blast ended with code:$blast_ret"
+
+clean_workdir
+
 case $blast_ret in
 0)
     echo "success"
@@ -107,4 +128,5 @@ case $blast_ret in
     exit 1
     ;;
 esac
+
 

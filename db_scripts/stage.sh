@@ -1,8 +1,8 @@
 #!/bin/bash
 
 #dbname=nr
-#dbpartsize="400M"
 #dbtype=prot
+#dbpartsize="400M"
 
 dbname=nt
 dbtype=nucl
@@ -12,8 +12,9 @@ dbpartsize="400M"
 #dbtype=nucl
 #dbpartsize="400M"
 
-tmpdir=/local-scratch/hayashis/tmp
+tmpdir=/local-scratch/iugalaxy/tmp
 blastbin=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.28+/bin
+mkdir -p $tmpdir
 
 function download() {
     echo "downloading fasta"
@@ -112,14 +113,14 @@ function publish_parts() {
     ls $pubdir/*.gz > $pubdir/list
     cd -
 
-    echo "writing out blast.opt with some random numbers - please update!"
+    echo "writing out blast.opt with some random numbers - please update using total residues!"
     echo "-dbsize 11222333444" >> $pubdir/blast.opt
 
 }
 
-#download
-#check_md5
-#unzip
+download
+check_md5
+unzip
 makefulldb
 publish_parts
 showdbinfo

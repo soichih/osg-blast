@@ -8,19 +8,20 @@ import urllib
 import re
 import socket
 
-if len(sys.argv) != 8:
-    print "#arg: project_name db queries blast_type \"blast_opt\""
+if len(sys.argv) != 9:
+    print "in correct number of arguments"
     sys.exit(1)
 
-project=sys.argv[1]
-dbname=sys.argv[2]
-dbver=sys.argv[3]
-query_path=sys.argv[4]
-blast_type=sys.argv[5]
-user_blast_opt=sys.argv[6]
-rundir=sys.argv[7]
+portalid=sys.argv[1]
+project=sys.argv[2]
+dbname=sys.argv[3]
+dbver=sys.argv[4]
+query_path=sys.argv[5]
+blast_type=sys.argv[6]
+user_blast_opt=sys.argv[7]
+rundir=sys.argv[8]
 
-block_size=400
+block_size=600 #shooting for 1:00 - 1:30 runtime
 
 db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
@@ -146,7 +147,10 @@ for query_block in os.listdir(inputdir):
     sub.write("output = log/"+query_block+".part_$(Process).cluster_$(Cluster).out\n")
     sub.write("error = log/"+query_block+".part_$(Process).cluster_$(Cluster).err\n")
     sub.write("log = log/"+query_block+".log\n")
+
     sub.write("+ProjectName = \""+project+"\"\n") #only works if submitted directly on osg-xsede (use ~/.xsede_default_project instead)
+    sub.write("+PortalUser = \""+portalid+"\"\n")
+
     sub.write("transfer_output_files = output\n");
 
     #TODO - I should probably compress blast executable and input query block?
@@ -187,7 +191,7 @@ for query_block in os.listdir(inputdir):
     dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
     dag.write("RETRY "+query_block+" 3\n")
  
-    merge_subs.append(query_block)
+    merge_subs.append(query_block+".merge")
 
 #output final.sub
 fsub_name = "final.sub"
