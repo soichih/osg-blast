@@ -113,14 +113,14 @@ function publish_parts() {
     ls $pubdir/*.gz > $pubdir/list
     cd -
 
-    echo "writing out blast.opt with some random numbers - please update using total residues!"
+    echo "writing out blast.opt with some random numbers - please update using total residues (or total bases?)!"
     echo "-dbsize 11222333444" >> $pubdir/blast.opt
 
 }
 
-download
-check_md5
-unzip
+#download
+#check_md5
+#unzip
 makefulldb
 publish_parts
 showdbinfo

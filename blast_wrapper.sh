@@ -99,8 +99,16 @@ clean_workdir
 
 case $blast_ret in
 0)
-    echo "success"
+    echo "testing output xml integrity"
+    xmllint --noout $output_path
+    if [ $? -ne 0 ]; then
+	    echo "xml is malformed.."
+	    clean_workdir
+	    exit 1
+    fi
+    echo "looks good.. zipping up"
     gzip $output_path
+    echo "success"
     exit 0
     ;;
 1)

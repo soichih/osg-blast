@@ -20,7 +20,7 @@ user_blast_opt=sys.argv[5]
 rundir=sys.argv[6]
 
 #TODO - need to adjust this based on the size of the input db.. user provided db tends to be small..
-block_size=5000
+block_size=4000
 
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
 
@@ -101,7 +101,7 @@ else:
 
 sub.write("notification = never\n")
 sub.write("ShouldTransferFiles = YES\n")
-sub.write("when_to_transfer_output = ALWAYS\n\n") #as oppose to ON_EXIT
+sub.write("when_to_transfer_output = ON_EXIT\n\n") 
 
 sub.write("Requirements = (GLIDEIN_ResourceName =!= \"cinvestav\") \n") #cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
 

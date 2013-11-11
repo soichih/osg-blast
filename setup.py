@@ -21,7 +21,8 @@ blast_type=sys.argv[6]
 user_blast_opt=sys.argv[7]
 rundir=sys.argv[8]
 
-block_size=600 #shooting for 1:00 - 1:30 runtime
+#block_size=500 #shooting for 1:00 - 1:30 runtime
+block_size=800 #shooting for 1:00 - 1:30 runtime
 
 db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
@@ -106,6 +107,8 @@ blast_opt.close()
 
 #output condor submit file for running blast
 dag = open(rundir+"/blast.dag", "w")
+dag.write("CONFIG dagman.config\n\n")
+
 merge_subs = []
 for query_block in os.listdir(inputdir):
 
@@ -120,7 +123,7 @@ for query_block in os.listdir(inputdir):
 
     sub.write("notification = never\n")
     sub.write("ShouldTransferFiles = YES\n")
-    sub.write("when_to_transfer_output = ALWAYS\n\n") #as oppose to ON_EXIT
+    sub.write("when_to_transfer_output = ON_EXIT\n\n") #as oppose to ON_ALWAYS may transfer 0-byte result if job fails.. but we might want that?
 
     #not sure if this helps or not..
     #sub.write("request_memory = 500\n\n") #in megabytes
@@ -184,7 +187,6 @@ for query_block in os.listdir(inputdir):
     msub.write("log = log/"+query_block+".merge.log\n")
     msub.write("queue\n")
 
-    dag.write("CONFIG dagman.config\n")
     dag.write("JOB "+query_block+" "+sub_name+"\n")
     dag.write("RETRY "+query_block+" 10\n")
     dag.write("JOB "+query_block+".merge "+msub_name+"\n")

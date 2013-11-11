@@ -37,7 +37,7 @@ while True:
 
     #doc = libxml2.parseFile(path)
 
-    xml_file = gzip.open(path, "rw")
+    xml_file = gzip.open(path, "r")
     xml = xml_file.read() 
     doc = libxml2.parseDoc(xml)
     xml_file.close()
