@@ -51,9 +51,6 @@ function split() {
     echo "generating split"
     mkdir -p $tmpdir/$dbname.splits
     ./split_fasta.pl -i $tmpdir/$dbname.fasta -o $tmpdir/$dbname.splits/part -n $num_per_part
-    #cd $tmpdir/$dbname.splits/part
-    #./fasta_splitter.pl -part-total-size 50000000 $tmpdir/$dbname.fasta
-    #cd -
 }
 
 function zipsplit() {
