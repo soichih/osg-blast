@@ -1,16 +1,20 @@
 #!/bin/bash
 
-#dbname=nr
-#dbtype=prot
-#dbpartsize="400M"
-
-dbname=nt
-dbtype=nucl
+dbname=nr
+dbtype=prot
 dbpartsize="400M"
+
+#dbname=nt
+#dbtype=nucl
+#dbpartsize="400M"
 
 #dbname=human_genomic
 #dbtype=nucl
 #dbpartsize="400M"
+
+dbname=hg19
+dbtype=nucl
+dbpartsize="400M"
 
 tmpdir=/local-scratch/iugalaxy/tmp
 blastbin=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.28+/bin

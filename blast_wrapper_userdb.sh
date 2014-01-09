@@ -4,15 +4,19 @@ blast_path=$1
 blast_type=$2
 part=$3
 output_path=$4
+db_url=$5
 
 blast_opt=`cat blast.opt`
 query_path=block_$part
+
+echo "unzipping $query_path.gz"
+gunzip $query_path.gz
 
 echo "creating output directory"
 mkdir output
 
 echo `date` ": running on" `hostname` `uname -a`
-env
+env | grep OSG
 cat /etc/issue
 
 export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
@@ -42,8 +46,8 @@ function clean_workdir {
 	rm $blast_type
 	rm $query_path
 
-	echo "after clean up.."
-	ls -la .
+	#echo "after clean up.."
+	#ls -la .
 }
 
 echo "downloading blast bin"
@@ -69,6 +73,14 @@ if [ $? -ne 0 ]; then
 fi
 chmod +x $blast_type
 
+echo "downloading blast user db from $db_url"
+curl -m 5000 -H "Pragma:" $db_url -o db.tar.gz
+if [ $? -ne 0 ]; then
+    echo "failed to download user db"
+    clean_workdir
+    exit 1
+fi
+
 echo "unzipping blastdb"
 tar -xzf db.tar.gz 2>&1
 if [ $? -ne 0 ]; then
@@ -80,26 +92,28 @@ fi
 #debug..
 ls -la .
 
+#BATCH_SIZE is ignored for blastn - which uses "adaptive approach" http://www.ncbi.nlm.nih.gov/books/NBK1763/
+export BATCH_SIZE=2500 #attempt to limit virtual size at the expense for execution time
+
+#limit memory at 2G
+ulimit -v 2048000
+
 echo `date` "starting blast"
 echo "./$blast_type $blast_opt -db blastdb -query $query_path -out $output_path -outfmt 5"
-time 2>&1 ./$blast_type $blast_opt -db blastdb -query $query_path -out $output_path -outfmt 5
-blast_ret=$?
+time 2>&1 ./$blast_type $blast_opt -db blastdb -query $query_path -outfmt 5 | gzip > $output_path.gz
+blast_ret=${PIPESTATUS[0]}
 echo `date` "blast ended with code:$blast_ret"
-
+ls -la output
 clean_workdir
-
 case $blast_ret in
 0)
     echo "testing output xml integrity"
-    xmllint --noout $output_path
-    if [ $? -ne 0 ]; then
-	    echo "xml is malformed.."
-	    clean_workdir
+    gunzip -c $output_path.gz | xmllint --noout --stream -
+    if [ $? -ne ${PIPESTATUS[1]} ]; then
+	    echo "xml is malformed (probably truncated?).."
+            mv $output_path.gz ${output_path}.gz.malformed
 	    exit 1
     fi
-    echo "looks good.. zipping up"
-
-    gzip $output_path
     echo "success"
     exit 0
     ;;
@@ -123,8 +137,12 @@ case $blast_ret in
     echo "no blastp"
     exit 1
     ;;
+137)
+    echo "probably killed by SIGKILL(128+9)"
+    exit 1
+    ;;
 *)
-    echo "unknown error"
+    echo "unknown error code: $blast_ret"
     exit 1
     ;;
 esac

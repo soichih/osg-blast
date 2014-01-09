@@ -21,61 +21,49 @@ blast_type=sys.argv[6]
 user_blast_opt=sys.argv[7]
 rundir=sys.argv[8]
 
-#block_size=500 #shooting for 1:00 - 1:30 runtime
-block_size=800 #shooting for 1:00 - 1:30 runtime
+block_size=600 #shooting for 1:00 - 1:30 runtime
+#block_size=100 #shooting for 10 - 15 minutes
 
 db_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastdb/"+dbname+"."+dbver
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
 
-#rundir = "/N/dcwan/scratch/iugalaxy/rundir/"+str(time.time())
-#rundir = "/local-scratch/hayashis/rundir/"+str(time.time())
-
-#create rundir
-#if os.path.exists(rundir):
-#    print "#rundir already exists.."
-#    sys.exit(1)
-#else:
-#    os.makedirs(rundir)
 os.mkdir(rundir+"/log")
 os.mkdir(rundir+"/output")
 
+inputdir=rundir+"/input"
+os.makedirs(inputdir)
+
+def write_block(count, block):
+    outfile = open("%s/block_%d" % (inputdir, count), "w")
+    for query in block:
+        outfile.write(query[0])
+        outfile.write(query[1])
+    outfile.close()
+
 #parse input query
 input = open(query_path)
-queries = []
+query_block = []
 query = ""
+block_count = 0
 name = ""
 for line in input.readlines():
     if line[0] == ">":
         if name != "":
-            queries.append([name, query])
+            query_block.append([name, query])
+            if len(query_block) == block_size:
+                write_block(block_count, query_block)
+                query_block = []
+                block_count+=1
         name = line
         query = ""
     else:
         query += line
 if name != "":
-    queries.append([name, query])
+    query_block.append([name, query])
+    write_block(block_count, query_block)
+    query_block = []
+    block_count+=1
 input.close()
-
-#split queries into blocks
-inputdir=rundir+"/input"
-os.makedirs(inputdir)
-block = {}
-count = 0
-block = 0
-for query in queries:
-    if count == 0:
-        if block != 0:
-            outfile.close() 
-        outfile = open("%s/block_%d" % (inputdir, block), "w")
-        block+=1
-    count+=1
-    if count == block_size:
-        count = 0
-
-    outfile.write(query[0])
-    outfile.write(query[1])
-if outfile:
-    outfile.close()
 
 #list *.gz on the db_path
 con = urllib.urlopen(db_path+"/list")
@@ -99,21 +87,27 @@ blast_opt = file(rundir+"/blast.opt", "w")
 blast_opt.write(db_blast_opt)
 blast_opt.write(" "+user_blast_opt)
 
-#500 will cause memory usage issue with merge.py
-#TODO - update on merge.py as well to match this (should be configurable..)
-blast_opt.write(" -max_target_seqs 20") 
+#increasing max_target_seqs increases virtual memory usage. NCBI article suggests to set ulimit, or use BATCH_SIZE env.
+#for now, let's set this to small (compared to default 500) to workaround the memory issue
+#http://www.ncbi.nlm.nih.gov/books/NBK1763/
+#update on merge.py as well to match this (should be configurable..)
+blast_opt.write(" -max_target_seqs 50") 
 
 blast_opt.close()
 
-#output condor submit file for running blast
 dag = open(rundir+"/blast.dag", "w")
 dag.write("CONFIG dagman.config\n\n")
 
-merge_subs = []
-for query_block in os.listdir(inputdir):
+shutil.copy("blast_wrapper.sh", rundir)
+shutil.copy("merge.py", rundir)
+shutil.copy("merge_final.py", rundir)
+shutil.copy("dagman.config", rundir) #to increase DAGMAN_MAX_JOB_HOLDS (what was this again?)
 
-    sub_name = query_block+".sub"
-    sub = open(rundir+"/"+sub_name, "w")
+subs = []
+for dbnum in range(0, len(dbparts)):
+    sub_name = "db_"+str(dbnum)
+    subs.append(sub_name)
+    sub = open(rundir+"/"+sub_name+".sub", "w")
 
     if socket.gethostname() == "osg-xsede.grid.iu.edu":
         sub.write("#for osg-xsede\n")
@@ -125,77 +119,79 @@ for query_block in os.listdir(inputdir):
     sub.write("ShouldTransferFiles = YES\n")
     sub.write("when_to_transfer_output = ON_EXIT\n\n") #as oppose to ON_ALWAYS may transfer 0-byte result if job fails.. but we might want that?
 
-    #not sure if this helps or not..
-    #sub.write("request_memory = 500\n\n") #in megabytes
-    #sub.write("request_disk = 256000\n\n") #in kilobytes
+    #cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
+    #crane is not production yet (#18017)
+    sub.write("Requirements = (GLIDEIN_ResourceName =!= \"Nebraska\") && (GLIDEIN_ResourceName =!= \"cinvestav\") && (Memory >= 2000) \n") 
 
-    ##Serguei says this has been fixed (goc ticket 17246)
-    #sub.write("Requirements = (GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") \n") #NWICG_NDCMS has curl access issue currently 10/1/2013
-
-    sub.write("Requirements = (GLIDEIN_ResourceName =!= \"cinvestav\") \n") #cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
-
-    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 10800) && JobStatus == 2\n")  #max 3 hours
+    sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 14400) && JobStatus == 2\n")  #max 4 hours
     sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n") #release after 60 seconds
     sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n\n") #stay in queue on failures
 
-    #sub.write("periodic_remove = (CommittedTime - CommittedSuspensionTime) > 7200\n") #not sure if this works
-
-    #sub.write("periodic_remove = (ServerTime - JobCurrentStartDate) >= 7200\n") #not sure if this works
-    #above doesn't work... seem to be killing jobs left and right, and.. also seeing following
-    #012 (38534006.002.000) 08/31 13:29:19 Job was held.
-    #    The job attribute PeriodicRemove expression '( ServerTime - JobCurrentStartDate ) >= 7200' evaluated to UNDEFINED
-    #    Code 5 Subcode 0
-
     sub.write("executable = blast_wrapper.sh\n")
-    sub.write("output = log/"+query_block+".part_$(Process).cluster_$(Cluster).out\n")
-    sub.write("error = log/"+query_block+".part_$(Process).cluster_$(Cluster).err\n")
-    sub.write("log = log/"+query_block+".log\n")
+    sub.write("output = log/db_"+str(dbnum)+".block_$(Process).$(Cluster).out\n")
+    sub.write("error = log/db_"+str(dbnum)+".block_$(Process).$(Cluster).out\n") #mix out and err together..
+    sub.write("log = log/db_"+str(dbnum)+".$(Cluster).log\n") #pull all processes together
 
     sub.write("+ProjectName = \""+project+"\"\n") #only works if submitted directly on osg-xsede (use ~/.xsede_default_project instead)
     sub.write("+PortalUser = \""+portalid+"\"\n")
 
     sub.write("transfer_output_files = output\n");
 
-    #TODO - I should probably compress blast executable and input query block?
-    sub.write("transfer_input_files = blast.opt,input/"+query_block+"\n")
-    sub.write("arguments = "+bin_path+" "+blast_type+" "+query_block+" "+dbname+" "+db_path+" $(Process) output/"+query_block+".part_$(Process).result\n");
+    #TODO - should I compress query block?
+    sub.write("transfer_input_files = blast.opt,input/block_$(Process)\n")
+    
+    #arguments order
+    #blast_path=$1
+    #blast_type=$2
+    #query_path=$3
+    #db=$4
+    #dburl=$5
+    #part=$6
+    #output_path=$7
+    sub.write("arguments = "+bin_path+" "+blast_type+" block_$(Process) "+dbname+" "+db_path+" "+str(dbnum)+" output/block_$(Process).db_"+str(dbnum)+".result\n");
 
     #description to make condor_q looks a bit nicer
-    sub.write("+Description = \""+blast_type+" "+dbname+" "+query_block+".part_$(Process)\"\n")
+    sub.write("+Description = \""+blast_type+" "+dbname+" db_"+str(dbnum)+".block_$(Process).$(Cluster)\"\n")
 
-    sub.write("\nqueue "+str(len(dbparts))+"\n")
+    sub.write("\nqueue "+str(block_count)+"\n")
     sub.close()
 
-    #copy blast_wrapper.sh
-    shutil.copy("blast_wrapper.sh", rundir)
+    dag.write("JOB "+sub_name+" "+sub_name+".sub\n")
+    dag.write("RETRY "+sub_name+" 10\n") #can I lower this?
+    #dag.write("JOB "+query_block+".merge "+msub_name+"\n")
+    #dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
+    #dag.write("RETRY "+query_block+" 3\n")
 
-    #copy merge.py
-    shutil.copy("merge.py", rundir)
-    shutil.copy("merge_final.py", rundir)
+dag.write("\n")
 
-    #copy dagman config
-    shutil.copy("dagman.config", rundir)
-
-    msub_name = query_block+".merge.sub"
-    msub = open(rundir+"/"+msub_name, "w")
+#output submit files to merge parts for all blocks (after all subs ends)
+merge_subs = []
+for query_block in os.listdir(inputdir):
+    msub_name = query_block+".merge"
+    merge_subs.append(msub_name)
+    msub = open(rundir+"/"+msub_name+".sub", "w")
     msub.write("universe = local\n")
     msub.write("notification = never\n")
     msub.write("executable = merge.py\n")
     msub.write("arguments = "+query_block+"\n")
     msub.write("output = log/"+query_block+".merge.out\n")
-    msub.write("error = log/"+query_block+".merge.err\n")
+    msub.write("error = log/"+query_block+".merge.out\n")
     msub.write("log = log/"+query_block+".merge.log\n")
     msub.write("queue\n")
 
-    dag.write("JOB "+query_block+" "+sub_name+"\n")
-    dag.write("RETRY "+query_block+" 10\n")
-    dag.write("JOB "+query_block+".merge "+msub_name+"\n")
-    dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
-    dag.write("RETRY "+query_block+" 3\n")
- 
-    merge_subs.append(query_block+".merge")
+    dag.write("JOB "+msub_name+" "+msub_name+".sub\n")
+    dag.write("PARENT "+" ".join(subs)+" CHILD "+msub_name+"\n")
+    dag.write("RETRY "+msub_name+" 3\n") 
 
-#output final.sub
+    #limit to 10 merge at a time
+    # http://research.cs.wisc.edu/htcondor/manual/v7.6/2_10DAGMan_Applications.html
+    # section 2.10.6.4
+    dag.write("CATEGORY "+msub_name+" merge\n")
+    dag.write("MAXJOBS merge 10\n")
+
+dag.write("\n")
+        
+#output final.sub to merge all block merged files into a single xml
 fsub_name = "final.sub"
 fsub = open(rundir+"/"+fsub_name, "w")
 fsub.write("universe = local\n")
@@ -203,15 +199,14 @@ fsub.write("notification = never\n")
 fsub.write("executable = merge_final.py\n")
 fsub.write("arguments = "+rundir+"/output\n")
 fsub.write("output = log/final.out\n")
-fsub.write("error = log/final.err\n")
+fsub.write("error = log/final.out\n")
 fsub.write("log = log/final.log\n")
 fsub.write("queue\n")
 
+#should I really do this?
 dag.write("JOB final final.sub\n")
 dag.write("PARENT "+" ".join(merge_subs)+" CHILD final\n")
 dag.write("RETRY final 3\n")
 
 dag.close()
 
-#output rundir
-print rundir

@@ -16,11 +16,11 @@ should not be used from the merged file.
 """
 
 # Modules #
-import sys, os, glob
+import sys, os, glob, gzip
 output_dir = sys.argv[1]
 
-output_path = output_dir+"/merged.xml"
-output = open(output_path, "w")
+output_path = output_dir+"/merged.xml.gz"
+output = gzip.open(output_path, "w")
 print "final output:",output_path
 
 count = 0 #start with block 0
@@ -36,7 +36,7 @@ while True:
 		path = output_dir+"/block_"+str(count)+".result"
 		if os.path.exists(path_gz):
 			#python gzip.open() / readline is slow.. just unzip first
-			os.system("gunzip "+path_gz)
+			os.system("gunzip -f "+path_gz)
 			#handle = gzip.open(path, "r")
 			handle = open(path, "r")
 		else:
@@ -78,7 +78,9 @@ while True:
 
 	handle.close()
 
+        print "removing",path
 	os.remove(path)
+
 	count+=1
 
 if count > 0:

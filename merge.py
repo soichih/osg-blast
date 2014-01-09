@@ -7,7 +7,12 @@ import glob
 import resource
 import gzip
 
-max_target_seqs=20 #default is 500 in blast - need to match with blast.opt
+#default is 500 in blast - need to match with blast.opt(in setup.py and setup_userdb.py)
+#increasing max_target_seqs increases virtual memory usage and causes batch manager to SIGKILL.
+#NCBI article suggests to set ulimit, or use BATCH_SIZE env for now, let's set this to small 
+#(compared to default 500) to workaround the memory issue
+#http://www.ncbi.nlm.nih.gov/books/NBK1763/
+max_target_seqs=50
 
 #http://biopython.org/DIST/docs/tutorial/Tutorial.html#htoc82
 #from Bio.Blast import NCBIXML
@@ -22,7 +27,7 @@ template_doc = None
 queries = {}
 part=0
 while True:
-    path = "output/"+blockname+".part_"+str(part)+".result.gz"
+    path = "output/"+blockname+".db_"+str(part)+".result.gz"
     if not os.path.exists(path):
         break 
 
@@ -144,7 +149,7 @@ f.close()
 #remove all original results for this block (to save diskspace)
 part=0
 while True:
-    path = "output/"+blockname+".part_"+str(part)+".result.gz"
+    path = "output/"+blockname+".db_"+str(part)+".result.gz"
     if not os.path.exists(path):
         break 
     print "removing",path

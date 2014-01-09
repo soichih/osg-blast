@@ -13,7 +13,7 @@ echo "creating output directory"
 mkdir output
 
 echo `date` ": running on" `hostname` `uname -a`
-env
+env | grep OSG
 cat /etc/issue
 
 export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
@@ -41,6 +41,7 @@ function clean_workdir {
 	rm $db.*
 	rm $blast_type
 	rm $query_path
+        #rm $output_path
 
 	#echo "after clean up.."
 	#ls -la .
@@ -49,7 +50,7 @@ function clean_workdir {
 echo "downloading blast bin"
 curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
 if [ $? -ne 0 ]; then
-    echo "download failed through squid.. trying without it"
+    echo "blast bin download failed through squid.. trying without it"
     unset http_proxy
     curl -m 120 -H "Pragma:" -O $blast_path/$blast_type.gz
     if [ $? -ne 0 ]; then
@@ -70,7 +71,7 @@ fi
 chmod +x $blast_type
 
 echo "downloading blastdb" 
-time 2>&1 curl -m 3000 -H "Pragma:" -O $dburl/$db.$part.tar.gz #50 minutes seems way too long.. but some sites are very slow (MTWT2..)
+time curl -m 3000 -H "Pragma:" -O $dburl/$db.$part.tar.gz #50 minutes seems way too long.. but some sites are very slow (MTWT2..)
 if [ $? -ne 0 ]; then
     echo "failed to download db.. exiting"
     clean_workdir
@@ -88,10 +89,13 @@ fi
 #debug..
 ls -la .
 
+#limit memory at 2G
+ulimit -v 2048000
+
 echo `date` "starting blast"
 dbname=$db.`printf "%02d" $part`
 echo "./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5"
-time 2>&1 ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
+time ./$blast_type $blast_opt -db $dbname -query $query_path -out $output_path -outfmt 5
 blast_ret=$?
 echo `date` "blast ended with code:$blast_ret"
 
@@ -100,10 +104,10 @@ clean_workdir
 case $blast_ret in
 0)
     echo "testing output xml integrity"
-    xmllint --noout $output_path
+    xmllint --noout --stream $output_path
     if [ $? -ne 0 ]; then
-	    echo "xml is malformed.."
-	    clean_workdir
+	    echo "xml is malformed (probably truncated?).."
+            mv $output_path ${output_path}.malformed
 	    exit 1
     fi
     echo "looks good.. zipping up"
@@ -131,8 +135,12 @@ case $blast_ret in
     echo "no blastp"
     exit 1
     ;;
+137)
+    echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
+    exit 1
+    ;;
 *)
-    echo "unknown error"
+    echo "unknown error code: $blast_ret"
     exit 1
     ;;
 esac
