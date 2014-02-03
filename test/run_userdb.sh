@@ -12,7 +12,8 @@ input_fasta_type=nucl #nucl or prot
 input_fasta_title="normal.fasta" 
 #input_query="/home/iugalaxy/test/samples/normal.fasta.50000"
 #input_query="/home/iugalaxy/test/samples/normal.fasta.1000000" #1m
-input_query="/home/iugalaxy/test/samples/normal.fasta.100000000" #100m
+#input_query="/home/iugalaxy/test/samples/normal.fasta.100000000" #100m
+input_query="/local-scratch/iugalaxy/tmp/normal.fasta/container000"
 
 echo "create blast db from $input_fasta"
 temp_dbdir=/local-scratch/iugalaxy/tmp/build_db.$RANDOM
@@ -24,7 +25,8 @@ cd -
 rm -rf $temp_dbdir
 
 echo "setting up rundir"
-../setup_userdb.py hayashis IU-GALAXY $input_query $blast "$blast_ops" $rundir
+cd ../
+./setup_userdb.py hayashis IU-GALAXY $input_query $blast "$blast_ops" $rundir
 
 #cd $rundir
 #condor_submit_dag blast.dag

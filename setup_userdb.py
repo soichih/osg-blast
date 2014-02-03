@@ -25,7 +25,7 @@ rundir=sys.argv[6]
 #for non-blastn, BATCH_SIZE should limit the amount of memory used so you can probably go upto 4000
 #block_size=500 #500 should use 1.5G - 2G (occationally 4G..)
 
-block_size=10000 #should work with -window_size 32000
+block_size=40000 #50000 runs out of memory occastionally
 
 bin_path = "http://osg-xsede.grid.iu.edu/scratch/iugalaxy/blastapp/ncbi-blast-2.2.28+/bin"
 
@@ -99,8 +99,9 @@ proc = subprocess.Popen(["md5sum", rundir+"/db.tar.gz"], stdout=subprocess.PIPE)
 (out, err) = proc.communicate()
 out_split = out.split(" ")
 db_filename=out_split[0]+".db.tar.gz"
-print "moving db"
-os.system("mv "+rundir+"/db.tar.gz /local-scratch/public_html/iugalaxy/userdb/"+db_filename)
+public_path="/local-scratch/public_html/iugalaxy/userdb"
+print "moving db to "+public_path
+os.system("mv "+rundir+"/db.tar.gz "+public_path+"/"+db_filename)
 
 #output condor submit file for running blast
 dag = open(rundir+"/blast.dag", "w")
