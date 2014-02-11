@@ -10,7 +10,7 @@ blast_ops="-evalue 0.001 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc
 input_fasta="/home/hayashis/git/osg-blast/test/fasta/hs_alt_CHM1_1.1_chr22.fa" #must be absolute path
 input_fasta_type=nucl #nucl or prot
 input_fasta_title="chr22.fasta"
-#input_query="/home/iugalaxy/test/samples/normal.fasta.50000"
+input_query="/local-scratch/iugalaxy/tmp/normal.fasta/container000"
 
 echo "create blast db from $input_fasta"
 mkdir -p $rundir/$input_fasta_title
