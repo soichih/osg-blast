@@ -4,7 +4,6 @@ rundir=/tmp/$RANDOM
 echo "using rundir:$rundir"
 mkdir $rundir
 
-#(cd .. && /setup.py hayashis IU-GALAXY nr latest /home/iugalaxy/test/samples/nr.70937 blastx '-evalue 0.001' $rundir)
 (cd .. && ./setup.py hayashis IU-GALAXY nr latest /home/iugalaxy/test/samples/nr.100 blastx '-evalue 0.001' $rundir)
 
 cd $rundir
