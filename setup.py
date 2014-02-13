@@ -125,7 +125,7 @@ for dbnum in range(0, len(dbparts)):
 
     sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 14400) && JobStatus == 2\n")  #max 4 hours
     sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n") #release after 60 seconds
-    sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n\n") #stay in queue on failures
+    sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode == 1)\n\n") #stay in queue on failures (1 means re-try - 5 means full abort)
 
     sub.write("executable = blast_wrapper.sh\n")
     sub.write("output = log/db_"+str(dbnum)+".block_$(Process).$(Cluster).out\n")
@@ -157,7 +157,9 @@ for dbnum in range(0, len(dbparts)):
     sub.close()
 
     dag.write("JOB "+sub_name+" "+sub_name+".sub\n")
-    dag.write("RETRY "+sub_name+" 10\n") #can I lower this?
+    dag.write("ABORT-DAG-ON "+sub_name+" 5 RETURN 1\n") #kill dag if one job reports sigkill (preemption, or out of memory)
+    dag.write("RETRY "+sub_name+" 10\n") #can I lower this?(
+
     #dag.write("JOB "+query_block+".merge "+msub_name+"\n")
     #dag.write("PARENT "+query_block+" CHILD "+query_block+".merge\n")
     #dag.write("RETRY "+query_block+" 3\n")

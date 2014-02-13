@@ -1,5 +1,6 @@
 #!/bin/bash
 
+
 blast_path=$1
 blast_type=$2
 query_path=$3
@@ -11,6 +12,9 @@ blast_opt=`cat blast.opt`
 
 echo "creating output directory"
 mkdir output
+
+echo "touching empty output file - to prevent shadow exception"
+touch $output_path
 
 echo `date` ": running on" `hostname` `uname -a`
 env | grep OSG
@@ -117,31 +121,31 @@ case $blast_ret in
     ;;
 1)
     echo "Error in query sequence(s) or BLAST options"
-    exit 0
+    exit 0 #mark as done
     ;;
 2)
     echo "Error in blast database"
-    exit 1
+    exit 1 #retry
     ;;
 3)
     echo "Error in blast engine"
-    exit 1
+    exit 1 #retry
     ;;
 4)
     echo "out of memory"
-    exit 1
+    exit 5 #full abort
     ;;
 127)
     echo "no blastp"
-    exit 1
+    exit 1 #retry
     ;;
 137)
     echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
-    exit 1
+    exit 5 #full abort
     ;;
 *)
     echo "unknown error code: $blast_ret"
-    exit 1
+    exit 5 #full abort
     ;;
 esac
 

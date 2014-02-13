@@ -125,7 +125,7 @@ sub.write("Requirements = (GLIDEIN_ResourceName =!= \"cinvestav\") && (Memory >=
 
 sub.write("periodic_hold = ( ( CurrentTime - EnteredCurrentStatus ) > 10800) && JobStatus == 2\n")  #max 3 hours
 sub.write("periodic_release = ( ( CurrentTime - EnteredCurrentStatus ) > 60 )\n") #release after 60 seconds
-sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n\n") #stay in queue on failures
+sub.write("on_exit_hold = (ExitBySignal == True) || (ExitCode == 1)\n\n") #stay in queue on failures
 
 sub.write("executable = blast_wrapper_userdb.sh\n")
 sub.write("output = log/block_$(Process).cluster_$(Cluster).out\n")
@@ -157,6 +157,7 @@ shutil.copy("dagman.config", rundir)
 
 dag.write("CONFIG dagman.config\n")
 dag.write("JOB query query.sub\n")
+dag.write("ABORT-DAG-ON query 5 RETURN 1\n") #killed due to preemption or out of memory
 dag.write("RETRY query 10\n") #too many?
 dag.write("JOB final final.sub\n")
 dag.write("PARENT query CHILD final\n")

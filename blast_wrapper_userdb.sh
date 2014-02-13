@@ -119,31 +119,31 @@ case $blast_ret in
     ;;
 1)
     echo "Error in query sequence(s) or BLAST options"
-    exit 0
+    exit 0 #mark as done
     ;;
 2)
     echo "Error in blast database"
-    exit 1
+    exit 1 #retry
     ;;
 3)
     echo "Error in blast engine"
-    exit 1
+    exit 1 #retry
     ;;
 4)
     echo "out of memory"
-    exit 1
+    exit 5 #full abort
     ;;
 127)
     echo "no blastp"
-    exit 1
+    exit 1 #retry
     ;;
 137)
-    echo "probably killed by SIGKILL(128+9)"
-    exit 1
+    echo "probably killed by SIGKILL(128+9)" #preemption or memory 
+    exit 5 #full abort
     ;;
 *)
     echo "unknown error code: $blast_ret"
-    exit 1
+    exit 5 #full abort
     ;;
 esac
 

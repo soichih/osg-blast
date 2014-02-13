@@ -17,7 +17,6 @@ dbpartsize="400M"
 #dbpartsize="400M"
 
 tmpdir=/local-scratch/iugalaxy/tmp
-blastbin=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.28+/bin
 mkdir -p $tmpdir
 
 function download() {
@@ -44,38 +43,18 @@ function unzip() {
     gunzip $tmpdir/$dbname.gz -c > $tmpdir/$dbname.fasta
 }
 
-function split() {
-    echo "removing old split dir"
-    rm -rf $tmpdir/$dbname.splits
-
-    echo "generating split"
-    mkdir -p $tmpdir/$dbname.splits
-    ./split_fasta.pl -i $tmpdir/$dbname.fasta -o $tmpdir/$dbname.splits/part -n $num_per_part
-}
-
-function zipsplit() {
-    for part in $(ls $tmpdir/$dbname.splits)
-    do
-        echo "gzipping for $part"
-        zippath=$tmpdir/$dbname
-        mkdir -p $zippath
-        #$blastbin/makeblastdb -in $tmpdir/$dbname.splits/$part -dbtype prot -out $dbpath/$dbname -hash_index
-        gzip -c $tmpdir/$dbname.splits/$part > $zippath/$part.gz
-    done
-}
-
 function makefulldb() {
     echo "making db"
     dbpath=$tmpdir/$dbname.db
     rm -rf $dbpath
     mkdir -p $dbpath
-    $blastbin/makeblastdb -in $tmpdir/$dbname.fasta -dbtype $dbtype -out $dbpath/$dbname -max_file_sz $dbpartsize -parse_seqids -hash_index
+    makeblastdb -in $tmpdir/$dbname.fasta -dbtype $dbtype -out $dbpath/$dbname -max_file_sz $dbpartsize -parse_seqids -hash_index
 }
 function showdbinfo() {
     dbpath=$tmpdir/$dbname.db
     export BLASTDB=$dbpath
     echo "running blastdbcmd to get db size"
-    $blastbin/blastdbcmd -db $dbname -info
+    blastdbcmd -db $dbname -info
 }
 
 function makedb() {
@@ -84,7 +63,7 @@ function makedb() {
         echo "making db for $part"
         dbpath=$tmpdir/$dbname.partdb
         mkdir -p $dbpath
-        $blastbin/makeblastdb -in $tmpdir/$dbname.splits/$part -dbtype prot -out $dbpath/$part -hash_index
+        makeblastdb -in $tmpdir/$dbname.splits/$part -dbtype prot -out $dbpath/$part -hash_index
     done
 }
 
