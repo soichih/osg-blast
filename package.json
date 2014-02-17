@@ -2,7 +2,8 @@
     "name": "osg-blast",
     "version": "2.0.1",
     "description": "blast workflow for open science grid",
-    "main": "run.js",
+    "main": "index.js",
+    "bin": "./bin/osg-blast",
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
@@ -24,6 +25,9 @@
         "osg": "*",
         "temp": "*",
         "async": "*",
+        "merge": "*",
+        "promise": "*",
+        "readblock": "*",
         "which": "*"
     }
 }

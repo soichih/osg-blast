@@ -1,0 +1,17 @@
+#!/usr/bin/env node
+var osgblast = require("../");
+
+/*
+if (process.argv.length < 3) {
+  console.error("Usage: which <thing>")
+  process.exit(1)
+}
+*/
+
+osgblast.run().then(function() {
+    console.log("workflow completed successfully");
+    process.exit(0);
+}, function() {
+    console.log("workflow failed permanently");
+    process.exit(1);
+});
