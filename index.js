@@ -417,7 +417,7 @@ module.exports.run = function(config) {
                             fs.writeSync(fd, "export dbname=\""+config.dbinfo.parts[dbpart]+"\"\n");
                             fs.writeSync(fd, "export blast="+config.blast+"\n");
                             if(config.dbinfo.length) {
-                                config.blast_opts += " -dbsize "+config.dbinfo.length;
+                                fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
                             }
                             fs.writeSync(fd, "export blast_opts=\""+config.blast_opts+"\"\n");
                             fs.close(fd);
