@@ -28,6 +28,7 @@
         "merge": "*",
         "promise": "*",
         "readblock": "*",
+        "rimraf": "*",
         "which": "*"
     }
 }

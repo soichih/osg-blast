@@ -7,6 +7,7 @@ var Promise = require('promise');
 var merge = require('merge');
 var async = require('async');
 var path = require('path');
+var rimraf = require('rimraf');
 
 function readfastas(file, num, callback) {
     var fastas = [];
@@ -39,11 +40,81 @@ function padDigits(number, digits) {
     return Array(Math.max(digits - String(number).length + 1, 0)).join(0) + number;
 }
 
+/* parses content that looks like..
+#
+# Alias file created 12/13/2013 08:36:19
+#
+TITLE Nucleotide collection (nt)
+DBLIST                  nt.00 nt.01 nt.02 nt.03 nt.04 nt.05 nt.06 nt.07 nt.08 nt.09 nt.10 nt.11 nt.12 nt.13 nt.14 nt.15 nt.16
+NSEQ 20909183
+LENGTH 52564451792
+*/
+function load_db_info(dbinfo_path) {
+    var data = fs.readFileSync(dbinfo_path, {encoding: 'utf8'});
+    var dbinfo_lines = data.split("\n");
+
+    //parse out title
+    var title = dbinfo_lines[3].substring(6);
+    var parts = dbinfo_lines[4].substring(7).trim().split(" ");
+    var num_seq = parseInt(dbinfo_lines[5].substring(5));
+    var length = parseInt(dbinfo_lines[6].substring(7));
+    return {
+        title: dbinfo_lines[3].substring(6),
+        parts: dbinfo_lines[4].substring(7).trim().split(" "),
+        num_seq: parseInt(dbinfo_lines[5].substring(5)),
+        length: parseInt(dbinfo_lines[6].substring(7))
+    };
+}
+
 module.exports.run = function(config) {
+    /* config should look like
+    {
+        "project": "CSIU",
+        "user": "hayashis",
+        "input": "nt.5000.fasta",
+
+        "db": "oasis:nt.1-22-2014",
+
+        //"db_type": "oasis",
+        //"db_path": "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/nt.1-22-2014",
+        //"dbinfo_path": "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/nt.1-22-2014/nt.nal",
+
+        "blast": "blastn",
+        "blast_opts": "-evalue 0.001 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc_identity 98.0"
+    }
+    */
+
     if(!config) {
         //load config.json from cwd()
         var config = require(process.cwd()+'/config');
     }
+
+    var dbtokens = config.db.split(":");
+    if(dbtokens[0] == "oasis") {
+        //config._db_type = "oasis";
+        //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
+        config._db_oasispath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+        config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
+        var pdir = config._db_oasispath+"/"+config._db_name;
+        console.log("using dir:"+pdir);
+        if(fs.existsSync(pdir+".pal")) {
+            //config._db_type = "prot";
+            config.dbinfo = load_db_info(pdir+".pal");
+        } else if(fs.existsSync(pdir+".nal")) {
+            //config._db_type = "nucl";
+            config.dbinfo = load_db_info(pdir+".nal");
+        } else {
+            //single part db 
+            config.dbinfo = {
+                title: config._db_name, //TODO - pull real name from db?
+                parts: [config._db_name]
+            };
+        }
+    }
+
+    //load dbinfo
+    console.log("loaded dbinfo");
+    console.dir(config);
 
     //console.log("osg-blast running");
     //console.dir(config);
@@ -64,28 +135,6 @@ module.exports.run = function(config) {
     //write out the pid file
     fs.writeFile("pid.txt", process.pid.toString());
 
-    //create output directory to store output
-    fs.mkdir('output', function(err) {
-        if(err) {
-            console.log(err);
-        }
-    });
-
-    /*
-    var config = {
-        project: 'CSIU',
-        user: 'hayashis', //username to report to osg-xsede (usually the real submitter of the job)
-        input: 'test/nt.20000.fasta',
-        dbtype: 'oasis',
-        dbname: 'nt.1-22-2014',
-        dbparts: [
-            'nt.00', 'nt.01', 'nt.02', 'nt.03', 'nt.04', 'nt.05', 'nt.06', 'nt.07', 'nt.08', 'nt.09', 
-            'nt.10', 'nt.11', 'nt.12', 'nt.13', 'nt.14', 'nt.15', 'nt.16' ],
-        blast: 'blastn',
-        blast_opts: '-evalue 0.001 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc_identity 98.0'
-    };
-    */
-
     var condor = {
         //needed to run jobs on osg-xsede
         "+ProjectName": config.project,
@@ -104,7 +153,7 @@ module.exports.run = function(config) {
         test_job_count: 0, //number of jobs tested so far
         test_job_block_size: 50, //number of query to test
         target_job_duration: 1000*60*90, //shoot for 90 minutes
-        block_size: 1000, //testrun will reset this based on execution time of test jobs (and resource usage in the future)
+        block_size: 2000, //testrun will reset this based on execution time of test jobs (and resource usage in the future)
     }
 
     //start the workflow
@@ -113,6 +162,11 @@ module.exports.run = function(config) {
             then(run_test_jobs).
             then(split_input).
             then(queue_jobs);
+    /*
+        //start right away
+        return split_input().then(queue_jobs);
+    */
+
 
     function submittest(fastas, part, done) {
         status('RUNNING', 'Submitting test jobs using db part '+part);
@@ -123,19 +177,11 @@ module.exports.run = function(config) {
 
         var events = osg.submit({
             executable: __dirname+'/blast.sh',
-            /*
-            arguments: ['test.fasta',  //input query
-                '/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/'+config.dbname, //name of db to use
-                partname], //dbpart to run (nt.00)
-            */
-            timeout: 20*60*1000, //call timeout in 20 minutes 
-            /*
-            condor: merge({
-                'periodic_hold': '( ( CurrentTime - EnteredCurrentStatus ) > 14400) && JobStatus == 2'
-            }, condor) //some common condor options we need to pass
-            */
+            timeout: 30*60*1000, //30 minutes
             description: 'test blast job on dbpart:'+part+' with queries:'+fastas.length,
             condor: condor,
+
+            //use callback function to auto-generate rundir and let me put stuff to it
             rundir: function(rundir, done_prepare) {
                 async.series([
                     //write out input query
@@ -153,9 +199,12 @@ module.exports.run = function(config) {
                     function(next) {
                         fs.open(rundir+'/params.sh', 'w', function(err, fd) {
                             fs.writeSync(fd, "export inputquery=test.fasta\n");
-                            fs.writeSync(fd, "export dbpath=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+config.dbname+"\n");
-                            fs.writeSync(fd, "export dbname=\""+config.dbparts[part]+"\"\n");
+                            fs.writeSync(fd, "export dbpath="+config._db_oasispath+"\n");
+                            fs.writeSync(fd, "export dbname=\""+config.dbinfo.parts[part]+"\"\n");
                             fs.writeSync(fd, "export blast="+config.blast+"\n");
+                            if(config.dbinfo.length) {
+                                fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
+                            }
                             fs.writeSync(fd, "export blast_opts=\""+config.blast_opts+"\"\n");
                             fs.close(fd);
                             next();
@@ -261,12 +310,13 @@ module.exports.run = function(config) {
                 status('FAILED', 'Test failed on '+resourcename+' with code '+info.ret+' - aborting');
                 fs.readFile(job.options.output, 'utf8', function (err,data) {
                     console.log(data);
+                    fs.readFile(job.options.error, 'utf8', function (err,data) {
+                        console.log(data);
+
+                        osg.removeall();
+                        done('test failed with '+info.ret);
+                    }); 
                 }); 
-                fs.readFile(job.options.error, 'utf8', function (err,data) {
-                    console.log(data);
-                }); 
-                osg.removeall();
-                done('test failed with '+info.ret);
             }
         });
     }
@@ -363,9 +413,12 @@ module.exports.run = function(config) {
                     function(next) {
                         fs.open(rundir+'/params.sh', 'w', function(err, fd) {
                             fs.writeSync(fd, "export inputquery=input.fasta\n");
-                            fs.writeSync(fd, "export dbpath=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+config.dbname+"\n");
-                            fs.writeSync(fd, "export dbname=\""+config.dbparts[dbpart]+"\"\n");
+                            fs.writeSync(fd, "export dbpath="+config._db_oasispath+"\n");
+                            fs.writeSync(fd, "export dbname=\""+config.dbinfo.parts[dbpart]+"\"\n");
                             fs.writeSync(fd, "export blast="+config.blast+"\n");
+                            if(config.dbinfo.length) {
+                                config.blast_opts += " -dbsize "+config.dbinfo.length;
+                            }
                             fs.writeSync(fd, "export blast_opts=\""+config.blast_opts+"\"\n");
                             fs.close(fd);
                             next();
@@ -469,7 +522,18 @@ module.exports.run = function(config) {
                     fs.writeFile('terminated.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
                 }); 
             } else {
+                console.log("job terminated with code "+info.ret+" resubmitting");
                 resubmit(job, block, dbpart);
+                fs.readFile(job.options.output, 'utf8', function (err,data) {
+                    console.log("----------------------------------stdout------------------------------------------");
+                    console.log(data);
+                    fs.writeFile('terminated.stdout.'+block+'.'+dbpart+'.'+now.getTime(), data);
+                }); 
+                fs.readFile(job.options.error, 'utf8', function (err,data) {
+                    console.log("----------------------------------stderr------------------------------------------");
+                    console.log(data);
+                    fs.writeFile('terminated.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
+                }); 
             }
         });
     }
@@ -540,22 +604,21 @@ module.exports.run = function(config) {
         });
     }
 
-    //submit jobs!
+    //submit all jobs!
     function queue_jobs(blocks) {
-        var jobsubmitted = 0;
+        var jobnum = config.dbinfo.parts.length*blocks;
         var jobdone = 0;
         
         console.log("number of blocks:"+blocks);
-        console.log("number of dbparts:"+config.dbparts.length);
+        console.log("number of db parts:"+config.dbinfo.parts.length);
 
-        //submit all jobs
         return new Promise(function(resolve, reject) {
 
             function success(job) {
                 jobdone++;
-                status('RUNNING', 'job:'+job.id+' successfully completed:: finished:'+jobdone+'/'+jobsubmitted+' running:'+osg.running);
+                status('RUNNING', 'job:'+job.id+' successfully completed:: finished:'+jobdone+'/'+jobnum+' running:'+osg.running);
                 //job completed?
-                if(jobdone == jobsubmitted) {
+                if(jobdone == jobnum) {
                     resolve();
                 }
             }
@@ -569,28 +632,41 @@ module.exports.run = function(config) {
                 submitjob(block, dbpart, function() {}, success, resubmit); 
             }
 
-            var dbpart = 0;
-            async.whilst(
-                function() { return dbpart<config.dbparts.length; },
-                function(next_dbpart) {
-                    dbpart++;
-                    var block = 0;
+            //prepare output directory
+            console.log("cleanup output directory");
+            rimraf('output', function() {
+                //create output directory to store output
+                fs.mkdir('output', function(err) {
+                    if(err) {
+                        console.log(err);
+                    }
+
+                    //now submit
+                    var dbpart = 0;
                     async.whilst(
-                        function() { return block<blocks; },
-                        function(next_block) {
-                            block++;
-                            submitjob(block-1, dbpart-1, next_block, success, resubmit); 
-                            jobsubmitted++;
-                        }, 
+                        function() { return dbpart<config.dbinfo.parts.length; },
+                        function(next_dbpart) {
+                            dbpart++;
+                            var block = 0;
+                            async.whilst(
+                                function() { return block<blocks; },
+                                function(next_block) {
+                                    block++;
+                                    submitjob(block-1, dbpart-1, next_block, success, resubmit); 
+                                },
+                                function() {
+                                    next_dbpart();
+                                }
+                            );
+                        },
                         function() {
-                            next_dbpart();
+                            console.log("submitted all jobs");
                         }
                     );
-                }, 
-                function() {
-                    console.log("submitted all jobs");
-                }
-            );
+
+                });
+            });
+
         });
     }
 };

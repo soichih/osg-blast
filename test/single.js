@@ -19,16 +19,17 @@ var events = osg.submit({
         async.series([
             //symlink input query
             function(next) {
-                fs.symlink(path.resolve('nt.100.fasta'), rundir_path+'/test.fasta', next);
+                fs.symlink(path.resolve('nt.2000.fasta'), rundir_path+'/test.fasta', next);
             },
             //write out input param file
             function(next) {
                 fs.open(rundir_path+'/params.sh', 'w', function(err, fd) {
                     fs.writeSync(fd, "export inputquery=test.fasta\n");
-                    fs.writeSync(fd, "export dbpath=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/nt.1-22-2014\n");
-                    fs.writeSync(fd, "export dbname=nt.00\n");
+                    fs.writeSync(fd, "export dbpath=/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/human_genomic.1-22-2014\n");
+                    fs.writeSync(fd, "export dbname=human_genomic.00\n");
                     fs.writeSync(fd, "export blast=blastn\n");
                     fs.writeSync(fd, "export blast_opts=\"-evalue 0.001 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc_identity 98.0\"\n");
+                    fs.writeSync(fd, "export size_opts=\"-dbsize 52564451792\"\n");
                     fs.close(fd);
                     next();
                 });
@@ -85,7 +86,7 @@ events.on('terminate', function(job, info) {
         fs.readFile(job.options.output, 'utf8', function (err,data) {
             console.log(data);
         }); 
-        fs.readFile(job.rundir+"/output", 'utf8', function(err, data) {
+        fs.readFile(info.rundir+"/output", 'utf8', function(err, data) {
             if(err) {
                 console.log("failed to open output");
                 console.log(err);

@@ -54,8 +54,8 @@ echo "running blast"
 
 export BLASTDB=blastdb
 
-echo $blast -query $inputquery -db $dbname -out output -outfmt 6 `cat $dbpath/blast.opt` $blast_opts
-time $blast -query $inputquery -db $dbname -out output -outfmt 6 `cat $dbpath/blast.opt` $blast_opts
+echo $blast -query $inputquery -db $dbname -out output -outfmt 6 $blast_opts $blast_dbsize
+time $blast -query $inputquery -db $dbname -out output -outfmt 6 $blast_opts $blast_dbsize
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
