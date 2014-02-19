@@ -36,7 +36,7 @@ if [ ! -f $dbpath/$dbname.tar.gz ]; then
 fi
 
 mkdir blastdb
-echo "un-tarring blast db from $dbpath/$dbname to ./blastdb/"
+echo "un-tarring blast db from $dbpath/$dbname.tar.gz to ./blastdb/"
 (cd blastdb && tar -xzf $dbpath/$dbname.tar.gz)
 ls -lart blastdb
 

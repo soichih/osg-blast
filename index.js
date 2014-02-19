@@ -116,8 +116,6 @@ module.exports.run = function(config) {
     console.log("loaded dbinfo");
     console.dir(config);
 
-    //console.log("osg-blast running");
-    //console.dir(config);
     console.log("osg-blast running at "+process.cwd());
 
     /*
@@ -142,10 +140,10 @@ module.exports.run = function(config) {
 
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
                         "(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed
-                        //"(GLIDEIN_ResourceName =!= \"SPRACE\") && "+        //SPRACE doesn't update oasis (goc ticket 19587)
-                        "(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       
-                        "(GLIDEIN_ResourceName =!= \"Crane\") && "+       
-                        "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (Memory >= 2000) && (Disk >= 500*1024*1024)"
+                        "(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right
+                        //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
+                        //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
+                        "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && (Memory >= 2000) && (Disk >= 200*1024*1024)"
     }
 
     var workflow = {
@@ -231,8 +229,15 @@ module.exports.run = function(config) {
 
         events.on('timeout', function(job) {
             status('FAILED', 'Test job timed out on '+resourcename+' .. aborting');
-            osg.removeall();
-            done('test timeout');
+            console.log("---------------------------stdout-------------------------");
+            fs.readFile(job.options.output, 'utf8', function (err,data) {
+                console.log(data);
+                fs.readFile(job.options.error, 'utf8', function (err,data) {
+                    console.log("---------------------------stderr-------------------------");
+                    console.log(data);
+                    osg.removeall();
+                }); 
+            }); 
         });
 
         events.on('progress', function(job, info) {
@@ -240,7 +245,7 @@ module.exports.run = function(config) {
         });
 
         events.on('exception', function(job, info) {
-            status('FAILED', 'Test job failed on '+resourcename+' .. aborting :: '+info.Message);
+            status('FAILED', 'Test job threw exception on '+resourcename+' .. aborting :: '+info.Message);
             fs.readFile(job.options.output, 'utf8', function (err,data) {
                 console.log(data);
             }); 
@@ -277,8 +282,8 @@ module.exports.run = function(config) {
                 console.log(data);
             }); 
             */
-            //osg.removeall();
             //TODO - should I resubmit instead?
+            osg.removeall();
             done('test evicted');
         });
 
@@ -432,18 +437,18 @@ module.exports.run = function(config) {
 
         events.on('submit', function(job) {
             console.log(job.id+" submitted");
-            submitted(); //don't pass anything or get canceled
+            submitted(null); //null for err
         });
 
         events.on('timeout', function(job, info) {
             console.log(job.id+' timedout - resubmitting');
-            //TODO increment resubmit counter?
+            //TODO - should I to hold & release instead?
+            osg.remove(job);
             resubmit(job, block, dbpart);
         });
 
         events.on('progress', function(job, info) {
-            //TODO - anything we need to do?
-            //console.log('progress on db_part:'+part+' query_block:'+block + JSON.stringify(info));
+            console.log('progress on db_part:'+dbpart+' query_block:'+block + JSON.stringify(info));
         });
 
         events.on('hold', function(job, info) {
@@ -473,6 +478,7 @@ module.exports.run = function(config) {
         });
 
         events.on('execute', function(job, info) {
+            console.log(job.id+' running db_part:'+dbpart+' query_block:'+block);
             /*
             status('RUNNING', 'Running db_part:'+part+' query_block:'+block);
             osg.q(job).then(function(data) {
@@ -484,6 +490,7 @@ module.exports.run = function(config) {
         });
 
         events.on('exception', function(job, info) {
+            /*
             status('FAILED', 'Job failed on '+resourcename+' .. aborting :: '+info.Message);
             fs.readFile(job.options.output, 'utf8', function (err,data) {
                 console.log(data);
@@ -493,7 +500,17 @@ module.exports.run = function(config) {
             }); 
             osg.removeall();
             done('test exception');
-        });
+            */
+            console.log(job.id+" exception (resubmitting) "+resourcename);
+            console.dir(info);
+            fs.readFile(job.options.output, 'utf8', function (err,data) {
+                console.log(data);
+            }); 
+            fs.readFile(job.options.error, 'utf8', function (err,data) {
+                console.log(data);
+            }); 
+            //usually, exception event will be followed by hold event, but I don't think it's 100%
+         });
 
         events.on('abort', function(job, info) {
             status('FAILED', 'Job aborted on '+job.id+'.. aborting workflow');
@@ -616,7 +633,7 @@ module.exports.run = function(config) {
 
             function success(job) {
                 jobdone++;
-                status('RUNNING', 'job:'+job.id+' successfully completed:: finished:'+jobdone+'/'+jobnum+' running:'+osg.running);
+                status('RUNNING', 'job:'+job.id+' successfully completed:: finished:'+jobdone+'/'+jobnum);
                 //job completed?
                 if(jobdone == jobnum) {
                     resolve();

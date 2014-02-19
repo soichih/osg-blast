@@ -8,18 +8,19 @@ var condor = {
     "+ProjectName": "CSIU",
     "+PortalUser": "hayashis",
     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
-    "Requirements": "(GLIDEIN_ResourceName == \"SPRACE\") && (Memory >= 2000) && (Disk >= 500*1024*1024)"
+    //"Requirements": "(GLIDEIN_ResourceName == \"SPRACE\") && (Memory >= 2000) && (Disk >= 500*1024*1024)"
+    "Requirements": "(GLIDEIN_ResourceName == \"Tursker\")"
 }
 
 var events = osg.submit({
     executable: '../blast.sh',
-    timeout: 60*2*1000, //kill job if it doesn't finish in time (sec)
+    //timeout: 60*2*1000, 
     condor: condor, //some common condor options we need to pass
     rundir: function(rundir_path, done_prepare) {
         async.series([
             //symlink input query
             function(next) {
-                fs.symlink(path.resolve('nt.2000.fasta'), rundir_path+'/test.fasta', next);
+                fs.symlink(path.resolve('nt.100.fasta'), rundir_path+'/test.fasta', next);
             },
             //write out input param file
             function(next) {
@@ -103,3 +104,4 @@ events.on('terminate', function(job, info) {
         }); 
     }
 });
+
