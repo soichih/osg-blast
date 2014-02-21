@@ -9,13 +9,14 @@ source ./params.sh
 #dbpath=$2 # /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/nr.1-22-2014
 #dbname=$3 # nr.00
 
-export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.28+/bin
+export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
 export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
 
 #limit memory at 2G
 ulimit -v 2048000
 
 if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
+    env | sort
     echo "can't access oasis"
     exit 68
 fi
@@ -35,6 +36,7 @@ if [ ! -f $dbpath/$dbname.tar.gz ]; then
     exit 68
 fi
 
+#create subdirectory so that condor won't try to ship it back to submit host accidentally
 mkdir blastdb
 echo "un-tarring blast db from $dbpath/$dbname.tar.gz to ./blastdb/"
 (cd blastdb && tar -xzf $dbpath/$dbname.tar.gz)
@@ -98,6 +100,10 @@ case $blast_ret in
 137)
     echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
     exit 2
+    ;;
+139)
+    echo "blast segfaulted"
+    exit 14
     ;;
 255)
     echo "NCBI C++ Exception?"

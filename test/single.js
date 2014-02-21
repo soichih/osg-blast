@@ -10,9 +10,11 @@ var condor = {
     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
     //"Requirements": "(GLIDEIN_ResourceName == \"SPRACE\") && (Memory >= 2000) && (Disk >= 500*1024*1024)"
     "Requirements": "(GLIDEIN_ResourceName == \"Tursker\")"
-}
+} 
 
-var events = osg.submit({
+var workflow = new osg.Workflow();
+
+var job = workflow.submit({
     executable: '../blast.sh',
     //timeout: 60*2*1000, 
     condor: condor, //some common condor options we need to pass
@@ -41,23 +43,24 @@ var events = osg.submit({
     }
 });
 
-events.on('submit', function(job) {
+job.on('submit', function(info) {
     console.log("submitted");
+    console.dir(info);
 });
-events.on('execute', function(job, info) {
+job.on('execute', function(info) {
     console.log("job running.. q-ing");
-    osg.q(job).then(function(data) {
+    job.q(function(err, data) {
         console.log('running running on '+data.MATCH_EXP_JOBGLIDEIN_ResourceName);
         resourcename = data.MATCH_EXP_JOBGLIDEIN_ResourceName;
     });
 });
-events.on('progress', function(job, info) {
+job.on('progress', function(info) {
     console.dir(info);
 });
-events.on('exception', function(job, info) {
-    throw info.Message;
+job.on('exception', function(info) {
+    console.log(info.Message);
 });
-events.on('hold',function(job, info) {
+job.on('hold',function(info) {
     console.log("job held");
     console.dir(job);
     console.dir(info);
@@ -71,7 +74,7 @@ events.on('hold',function(job, info) {
     console.log("removing job");
     osg.remove(job);
 });
-events.on('evict', function(job, info) {
+job.on('evict', function(info) {
     console.log("job evicted");
     console.dir(info);
     fs.readFile(job.options.output, 'utf8', function (err,data) {
@@ -81,7 +84,7 @@ events.on('evict', function(job, info) {
         console.log(data);
     }); 
 });
-events.on('terminate', function(job, info) {
+job.on('terminate', function(info) {
     console.log("job terminated with return code:"+info.ret);
     if(info.ret == 0) {
         fs.readFile(job.options.output, 'utf8', function (err,data) {

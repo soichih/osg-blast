@@ -1,14 +1,41 @@
 #!/usr/bin/env node
+
+var fs = require('fs');
+var path = require('path');
 var osgblast = require("../");
 
-/*
-if (process.argv.length < 3) {
-  console.error("Usage: which <thing>")
-  process.exit(1)
+if (process.argv.length != 3) {
+    console.log("please pass location to config.json in the first argument");
 }
-*/
 
-osgblast.run().then(function() {
+var config_path = path.resolve(process.argv[2]);
+
+if(!fs.existsSync(config_path)) {
+    console.log("failed to find config:"+config_path);
+    process.exit(2);
+}
+
+//console.log("loading config:"+config_path);
+//console.log(process.cwd());
+var config = require(config_path);
+
+//set rundir if it's not set
+if(!config.rundir) {
+    var rundir = path.dirname(config_path);
+    config.rundir = rundir;
+}
+
+//create pid
+fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
+
+function status(status, message) {
+    fs.writeFileSync(config.rundir+"/status.txt", status+"\n"+message+"\n");
+    var d = new Date();
+    console.log(status + " :: " + d.toString() + " :: " + message);
+}
+
+//run osg-blast
+osgblast.run(config, status).then(function() {
     console.log("workflow completed successfully");
     process.exit(0);
 }, function() {
