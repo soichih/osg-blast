@@ -8,6 +8,11 @@ if (process.argv.length != 3) {
     console.log("please pass location to config.json in the first argument");
 }
 
+process.on('uncaughtException', function(err) {
+    //TODO send this to GOC?
+    console.log('osg-blast: Caught exception: ' + err);
+});
+
 var config_path = path.resolve(process.argv[2]);
 
 if(!fs.existsSync(config_path)) {
@@ -15,8 +20,6 @@ if(!fs.existsSync(config_path)) {
     process.exit(2);
 }
 
-//console.log("loading config:"+config_path);
-//console.log(process.cwd());
 var config = require(config_path);
 
 //set rundir if it's not set
@@ -34,11 +37,13 @@ function status(status, message) {
     console.log(status + " :: " + d.toString() + " :: " + message);
 }
 
-//run osg-blast
 osgblast.run(config, status).then(function() {
     console.log("workflow completed successfully");
-    process.exit(0);
-}, function() {
+    //process.exit(0);
+}).fail(function(err) {
     console.log("workflow failed permanently");
-    process.exit(1);
-});
+    console.log(err);
+    //process.exit(1);
+}).catch(function(err) {
+    console.log("workflow threw exception:"+err);
+}).done();
