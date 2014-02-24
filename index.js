@@ -646,9 +646,7 @@ module.exports.run = function(config, status) {
 
     function post_workflow() {
         var duration = new Date() - workflow_start;
-        console.log("workflow statistics");
-        console.log(JSON.stringify(workflow.runtime_stats, null, 2));
-        console.log("Total wall time(msec):"+duration);
+        status(null, "Workflow statistics:\n"+JSON.stringify(workflow.runtime_stats, null, 2)+"\nTotal wall time(msec):"+duration);
     }
 };
 

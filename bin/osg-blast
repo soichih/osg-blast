@@ -31,10 +31,15 @@ if(!config.rundir) {
 //create pid
 fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
 
+var prev_status;
 function status(status, message) {
+    if(status == null) {
+        status = prev_status;
+    } 
     fs.writeFileSync(config.rundir+"/status.txt", status+"\n"+message+"\n");
     var d = new Date();
     console.log(status + " :: " + d.toString() + " :: " + message);
+    prev_status = status;
 }
 
 osgblast.run(config, status).then(function() {
