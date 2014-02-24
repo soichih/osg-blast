@@ -60,7 +60,8 @@ function load_db_info(dbinfo_path) {
 
 module.exports.run = function(config, status) {
 
-    console.log("osgblast workflow starting with following config");
+    var workflow_start = new Date();
+    console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
     console.dir(config);
 
     /* config should look like
@@ -226,7 +227,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('execute', function(info) {
-            console.log("job executing");
+            console.log(job.id+" :: job executing on "+job.resource_name);
             //console.dir(info);//stuff from condor_q
         });
 
@@ -344,7 +345,7 @@ module.exports.run = function(config, status) {
     }
 
     function submitjob(block, dbpart, submitted, success, resubmit, stopwf) {
-        console.log("submitting job block:"+block+" dbpart:"+dbpart);
+        //console.log("submitting job block:"+block+" dbpart:"+dbpart);
 
         var _rundir = null; //_rundir for this particualar job (not config.rundir)
         var starttime;
@@ -398,16 +399,16 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submit', function(info) {
-            console.log(job.id+" submitted");
+            console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart);
             submitted(null); //null for err
         });
         job.on('submitfail', function(err) {
-            console.log("failed to submit job:"+err);
+            console.log("failed to submit job :: "+err);
             submitted(err); //null for err
         });
 
         job.on('timeout', function(info) {
-            console.log(job.id+' timedout - resubmitting');
+            console.log(job.id+" timed out - resubmitting qb:"+block+" dbpart:"+dbpart);
 
             //TODO - should I to hold & release instead?
             workflow.remove(job);
@@ -544,12 +545,32 @@ module.exports.run = function(config, status) {
                 console.log("Test failed.. waiting all to end");
                 deferred.reject(err);
             } else {
-                console.log("test jobs walltimes");
+                console.log("test jobs walltimes(msec)");
                 console.dir(results);
 
                 //calculate average time it took to run
                 var sum = results.reduce(function(psum,a) {return psum+a});
                 var average = sum / results.length; 
+
+                //compute standard deviation
+                var sumd = results.reduce(function(d, a) {
+                    var diff = average - a;
+                    return d+diff*diff;
+                });
+                var sdev = Math.sqrt(sumd/test_jobs.length);
+                console.log("standard deviatin:"+sdev);
+
+                /*
+                //check if all values are within sdev
+                results.forEach(function(result) {
+                    if(Math.abs(result - average) > sdev) {
+                        console.log("test result:"+result+" is outside S:"+sdev+" with average:"+average);
+                        deferred.reject();
+                        return;
+                    }
+                });
+                console.log("test results ok");
+                */
 
                 //calculate optimum query block size
                 workflow.block_size = parseInt(workflow.target_job_duration / average * workflow.test_job_block_size);
@@ -580,8 +601,7 @@ module.exports.run = function(config, status) {
             if(jobdone == jobnum) {
                 //console.log("resolving workflow");
                 status('COMPLETED', 'all jobs successfully completed. total jobs:'+jobnum);
-
-                console.log(JSON.stringify(workflow.runtime_stats, null, 2));
+                post_workflow();
                 deferred.resolve();
             }
         }
@@ -596,6 +616,7 @@ module.exports.run = function(config, status) {
         }
 
         function stopwf(err) {
+            post_workflow();
             workflow.removeall();
             deferred.reejct(err);
         }
@@ -621,6 +642,13 @@ module.exports.run = function(config, status) {
             }
         );
         return deferred.promise;
+    }
+
+    function post_workflow() {
+        var duration = new Date() - workflow_start;
+        console.log("workflow statistics");
+        console.log(JSON.stringify(workflow.runtime_stats, null, 2));
+        console.log("Total wall time(msec):"+duration);
     }
 };
 
