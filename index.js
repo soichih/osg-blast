@@ -1,3 +1,4 @@
+var http = require('http');
 var fs = require('fs');
 
 var osg = require('osg');
@@ -32,7 +33,7 @@ function padDigits(number, digits) {
 }
 */
 
-function load_db_info(dbinfo_path) {
+function load_db_info(data) {
     /* parses content that looks like..
     #
     # Alias file created 12/13/2013 08:36:19
@@ -42,7 +43,6 @@ function load_db_info(dbinfo_path) {
     NSEQ 20909183
     LENGTH 52564451792
     */
-    var data = fs.readFileSync(dbinfo_path, {encoding: 'utf8'});
     var dbinfo_lines = data.split("\n");
 
     //parse out title
@@ -61,8 +61,8 @@ function load_db_info(dbinfo_path) {
 module.exports.run = function(config, status) {
 
     var workflow_start = new Date();
-    console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
-    console.dir(config);
+    //console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
+    //console.dir(config);
 
     /* config should look like
     {
@@ -75,30 +75,6 @@ module.exports.run = function(config, status) {
         "blast_opts": "-evalue 0.001 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc_identity 98.0",
     }
     */
-
-    var dbtokens = config.db.split(":");
-    if(dbtokens[0] == "oasis") {
-        //config._db_type = "oasis";
-        //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
-        config._db_oasispath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
-        config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
-        var pdir = config._db_oasispath+"/"+config._db_name;
-        status('TESTING', "accessing oasis:"+pdir);
-        if(fs.existsSync(pdir+".pal")) {
-            //config._db_type = "prot";
-            config.dbinfo = load_db_info(pdir+".pal");
-        } else if(fs.existsSync(pdir+".nal")) {
-            //config._db_type = "nucl";
-            config.dbinfo = load_db_info(pdir+".nal");
-        } else {
-            //single part db 
-            config.dbinfo = {
-                title: config._db_name, //TODO - pull real name from db?
-                parts: [config._db_name]
-            };
-        }
-        status('TESTING', "oasis ok");
-    }
 
     var condor = {
         //needed to run jobs on osg-xsede
@@ -115,29 +91,113 @@ module.exports.run = function(config, status) {
 
     var workflow = new osg.Workflow();
 
-    //set some extra attributes for our workflow
-    workflow.test_job_num = 5; //number of jobs to submit for test
-    workflow.test_job_count = 0; //number of jobs tested so far
-    workflow.test_job_block_size = 50; //number of query to test
-    workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
+    function load_dbinfo(res, next) {
+        var deferred = Q.defer();
 
-    //testrun will reset this based on execution time of test jobs (and resource usage in the future)
-    workflow.block_size = 2000; 
+        var dbtokens = config.db.split(":");
+        if(dbtokens[0] == "oasis") {
+            console.log("processing oasis dbinfo");
+            //config._db_type = "oasis";
+            //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
+            config._oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+            config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
+            var pdir = config._oasis_dbpath+"/"+config._db_name;
+            status('TESTING', "loading dbinfo for oasisdb:"+pdir);
+            if(fs.existsSync(pdir+".pal")) {
+                //config._db_type = "prot";
+                var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else if(fs.existsSync(pdir+".nal")) {
+                //config._db_type = "nucl";
+                var data = fs.readFileSync(pdir+".nal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else {
+                //single part db 
+                config.dbinfo = {
+                    title: config._db_name, //TODO - pull real name from db?
+                    parts: [config._db_name]
+                };
+            }
+            status('TESTING', "oasis dbinfo loaded");
+            deferred.resolve(); 
+        } else {
+            status('TESTING', "processing user dbinfo");
+            //assume http or ftp partial url (http://osg-xsede.grid.iu.edu/scratch/hayashis/userdb/11c2c67532d678042b684c52f888e7bd:sts)
+            config._db_name = dbtokens.pop(); //grab last 
+            config._user_dbpath = dbtokens.join(":");
 
-    //convert input query path to absolute path
-    if(config.input[0] != "/") {
-        config.input = config.rundir+"/"+config.input;
-        console.log("using input path:"+config.input);
+            console.dir(config);
+
+            //try downloading pal
+            var apath = config._user_dbpath+"/"+config._db_name;
+            console.log("trying downloading "+apath+".pal");
+            http_get(apath+".pal", function(err, data) {
+                if(data) {
+                    config.dbinfo = load_db_info(data);
+                    deferred.resolve(); 
+                } else {
+                    console.log("failed.. now trying downloading "+apath+".nal");
+                    http_get(apath+".nal", function(err, data) {
+                        if(data) {
+                            config.dbinfo = load_db_info(data);
+                            deferred.resolve(); 
+                        } else {
+                            console.log("failed.. must be a single db");
+                            //single part db
+                            config.dbinfo = {
+                                title: config._db_name, //TODO - pull real name from db somehow?
+                                parts: [config._db_name]
+                            };
+                            deferred.resolve(); 
+                        }
+                    });
+
+                }
+            });
+        }
+        return deferred.promise;
     }
 
+    function http_get(url, next) {
+        http.get(url, function(res) {
+            if(res.statusCode == "200") {
+                var data = "";
+                res.on('data', function(chunk) {
+                    data += chunk;
+                });
+                res.on('end', function() {
+                    next(null, data);
+                });
+            } else {
+                next(res.statusCode);
+            }
+        });
+    }
+    
     //start the workflow
     return  prepare().
+            then(load_dbinfo).
             then(load_test_fasta).
             then(submit_test_jobs).
             then(split_input).
             then(submit_jobs);
 
     function prepare() {
+        //set some extra attributes for our workflow
+        workflow.test_job_num = 5; //number of jobs to submit for test
+        workflow.test_job_count = 0; //number of jobs tested so far
+        workflow.test_job_block_size = 50; //number of query to test
+        workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
+
+        //testrun will reset this based on execution time of test jobs (and resource usage in the future)
+        workflow.block_size = 2000; 
+
+        //convert input query path to absolute path
+        if(config.input[0] != "/") {
+            config.input = config.rundir+"/"+config.input;
+            console.log("using input path:"+config.input);
+        }
+
         var deferred = Q.defer();
         async.series([
             function(next) {
@@ -168,7 +228,7 @@ module.exports.run = function(config, status) {
     }
 
     function submittest(fastas, part, done) {
-        status('TESTING', 'Submitting test jobs part:'+part);
+        //status('TESTING', 'Submitting test jobs part:'+part);
 
         var job = workflow.submit({
             executable: __dirname+'/blast.sh',
@@ -194,7 +254,12 @@ module.exports.run = function(config, status) {
                     function(next) {
                         fs.open(rundir+'/params.sh', 'w', function(err, fd) {
                             fs.writeSync(fd, "export inputquery=test.fasta\n");
-                            fs.writeSync(fd, "export dbpath="+config._db_oasispath+"\n");
+                            if(config._oasis_dbpath) {
+                                fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
+                            }
+                            if(config._user_dbpath) {
+                                fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
+                            }
                             var dbpart = part;
                             if(config.dbinfo.parts.length <= part) {
                                 //use first db part if we don't have enough db parts
@@ -218,7 +283,8 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submit', function(info) {
-            //console.log(job.id+' test:'+part+' submitted');
+           status("TESTING", job.id+" submitted test job part:"+part);
+            console.log("rundir:"+job.rundir);
         });
 
         job.on('submitfail', function(err) {
@@ -227,7 +293,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('execute', function(info) {
-            console.log(job.id+" :: job executing on "+job.resource_name);
+            status("TESTING", job.id+" :: test job part:"+part+" executing on "+job.resource_name);
             //console.dir(info);//stuff from condor_q
         });
 
@@ -381,7 +447,12 @@ module.exports.run = function(config, status) {
                     function(next) {
                         fs.open(rundir+'/params.sh', 'w', function(err, fd) {
                             fs.writeSync(fd, "export inputquery=input.fasta\n");
-                            fs.writeSync(fd, "export dbpath="+config._db_oasispath+"\n");
+                            if(config._oasis_dbpath) {
+                                fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
+                            }
+                            if(config._user_dbpath) {
+                                fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
+                            }
                             fs.writeSync(fd, "export dbname=\""+config.dbinfo.parts[dbpart]+"\"\n");
                             fs.writeSync(fd, "export blast="+config.blast+"\n");
                             if(config.dbinfo.length) {
@@ -399,7 +470,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submit', function(info) {
-            console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart);
+            console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart+" rundir:"+job.rundir);
             submitted(null); //null for err
         });
         job.on('submitfail', function(err) {
@@ -541,6 +612,7 @@ module.exports.run = function(config, status) {
         }
 
         async.parallel(test_jobs, function(err, results) {
+            post_workflow();
             if(err) {
                 console.log("Test failed.. waiting all to end");
                 deferred.reject(err);

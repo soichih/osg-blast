@@ -5,41 +5,49 @@ cat params.sh
 
 source ./params.sh
 
-#inputquery=$1
-#dbpath=$2 # /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/nr.1-22-2014
-#dbname=$3 # nr.00
-
 export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
 export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
 
 #limit memory at 2G
 ulimit -v 2048000
 
-if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
-    env | sort
-    echo "can't access oasis"
-    exit 68
+if [ $oasis_dbpath ]; then
+    echo "using oasis db"
+
+    if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
+        env | sort
+        echo "can't access /cvmfs/oasis.opensciencegrid.org"
+        exit 68
+    fi
+
+    #echo "listing oasis projects avaialble"
+    #ls -lart /cvmfs/oasis.opensciencegrid.org
+    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects
+    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY
+    #echo "blastdb available in oasis"
+    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb
+
+    echo "listing $oasis_dbpath"
+    ls -lart $oasis_dbpath
+
+    if [ ! -f $oasis_dbpath/$dbname.tar.gz ]; then
+        echo "can't find $dbname.tar.gz in oasis"
+        exit 68
+    fi
+
+    #create subdirectory so that condor won't try to ship it back to submit host accidentally
+    mkdir blastdb
+    echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
+    (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
+else
+    echo "downloading user db from $user_dbpath/$dbname.tar.gz"
+    wget $user_dbpath/$dbname.tar.gz
+
+    #create subdirectory so that condor won't try to ship it back to submit host accidentally
+    mkdir blastdb
+    (cd blastdb && tar -xzf ../$dbname.tar.gz)
 fi
 
-#echo "listing oasis projects avaialble"
-#ls -lart /cvmfs/oasis.opensciencegrid.org
-#ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects
-#ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY
-echo "blastdb available in oasis"
-ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb
-
-echo "listing $dbpath"
-ls -lart $dbpath
-
-if [ ! -f $dbpath/$dbname.tar.gz ]; then
-    echo "can't find $dbname.tar.gz in oasis"
-    exit 68
-fi
-
-#create subdirectory so that condor won't try to ship it back to submit host accidentally
-mkdir blastdb
-echo "un-tarring blast db from $dbpath/$dbname.tar.gz to ./blastdb/"
-(cd blastdb && tar -xzf $dbpath/$dbname.tar.gz)
 ls -lart blastdb
 
 echo "head of $inputquery"
@@ -56,8 +64,8 @@ echo "running blast"
 
 export BLASTDB=blastdb
 
-echo $blast -query $inputquery -db $dbname -out output -outfmt 6 $blast_opts $blast_dbsize
-time $blast -query $inputquery -db $dbname -out output -outfmt 6 $blast_opts $blast_dbsize
+echo $blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
+time $blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
