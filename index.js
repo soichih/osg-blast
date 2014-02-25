@@ -8,6 +8,7 @@ var merge = require('merge');
 var async = require('async');
 var path = require('path');
 var rimraf = require('rimraf');
+var which = require('which');
 
 function readfastas(file, num, callback) {
     var fastas = [];
@@ -60,7 +61,6 @@ function load_db_info(data) {
 
 module.exports.run = function(config, status) {
 
-    var workflow_start = new Date();
     //console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
     //console.dir(config);
 
@@ -82,11 +82,11 @@ module.exports.run = function(config, status) {
         "+PortalUser": config.user,
 
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
-                        "(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed
+                        //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed
                         "(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
-                        "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && (Memory >= 2000) && (Disk >= 200*1024*1024)"
+                        "(Memory >= 2000) && (Disk >= 200*1024*1024)"
     }
 
     var workflow = new osg.Workflow();
@@ -96,6 +96,9 @@ module.exports.run = function(config, status) {
 
         var dbtokens = config.db.split(":");
         if(dbtokens[0] == "oasis") {
+            //add oasis requirements for condor Requirements
+            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && "+condor.Requirements;
+
             console.log("processing oasis dbinfo");
             //config._db_type = "oasis";
             //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
@@ -242,6 +245,18 @@ module.exports.run = function(config, status) {
             //use callback function to auto-generate rundir and let me put stuff to it
             rundir: function(rundir, done_prepare) {
                 async.series([
+                    //send blast binary to run
+                    function(next) {
+                        which(config.blast, function(err, path) {
+                            if(err) {
+                                done("can't find blast executable:"+config.blast);
+                            } else {
+                                //console.log("found path:"+path);
+                                //console.log("config.blast:"+config.blast);
+                                fs.symlink(path, rundir+'/'+config.blast, next);
+                            }
+                        });
+                    },
                     //write out input query
                     function(next) {
                         var data = "";
@@ -429,6 +444,16 @@ module.exports.run = function(config, status) {
             rundir: function(rundir, done_prepare) {
                 _rundir = rundir;
                 async.series([
+                    //send blast binary to run
+                    function(next) {
+                        which(config.blast, function(err, path) {
+                            if(err) {
+                                console.log("can't find blast executable:"+config.blast);
+                            } else {
+                                fs.symlink(path, rundir+'/'+config.blast, next);
+                            }
+                        });
+                    },
                     //link input query
                     function(next) {
                         /*
@@ -612,7 +637,7 @@ module.exports.run = function(config, status) {
         }
 
         async.parallel(test_jobs, function(err, results) {
-            post_workflow();
+            //post_workflow(); //not sure if I should output this at the end of testing
             if(err) {
                 console.log("Test failed.. waiting all to end");
                 deferred.reject(err);
@@ -630,7 +655,7 @@ module.exports.run = function(config, status) {
                     return d+diff*diff;
                 });
                 var sdev = Math.sqrt(sumd/test_jobs.length);
-                console.log("standard deviatin:"+sdev);
+                console.log("standard deviation:"+sdev);
 
                 /*
                 //check if all values are within sdev
@@ -717,8 +742,8 @@ module.exports.run = function(config, status) {
     }
 
     function post_workflow() {
-        var duration = new Date() - workflow_start;
-        status(null, "Workflow statistics:\n"+JSON.stringify(workflow.runtime_stats, null, 2)+"\nTotal wall time(msec):"+duration);
+        var log = workflow.print_runtime_stats();
+        status(null, "Workflow statistics:\n"+log);
     }
 };
 

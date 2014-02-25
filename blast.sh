@@ -5,8 +5,8 @@ cat params.sh
 
 source ./params.sh
 
-export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
-export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
+#export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
+#export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
 
 #limit memory at 2G
 ulimit -v 2048000
@@ -41,7 +41,7 @@ if [ $oasis_dbpath ]; then
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
 else
     echo "downloading user db from $user_dbpath/$dbname.tar.gz"
-    wget $user_dbpath/$dbname.tar.gz
+    time wget -q --timeout=30 $user_dbpath/$dbname.tar.gz
 
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
     mkdir blastdb
@@ -64,8 +64,8 @@ echo "running blast"
 
 export BLASTDB=blastdb
 
-echo $blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
-time $blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
+echo ./$blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
+time ./$blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
