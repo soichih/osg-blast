@@ -82,8 +82,8 @@ module.exports.run = function(config, status) {
         "+PortalUser": config.user,
 
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
-                        //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed
-                        "(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right
+                        //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed (works if I specify revision)
+                        //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
                         "(Memory >= 2000) && (Disk >= 200*1024*1024)"
@@ -181,15 +181,14 @@ module.exports.run = function(config, status) {
     return  prepare().
             then(load_dbinfo).
             then(load_test_fasta).
-            then(submit_test_jobs).
+            then(submit_tests).
             then(split_input).
             then(submit_jobs);
 
     function prepare() {
         //set some extra attributes for our workflow
         workflow.test_job_num = 5; //number of jobs to submit for test
-        workflow.test_job_count = 0; //number of jobs tested so far
-        workflow.test_job_block_size = 50; //number of query to test
+        workflow.test_job_block_size = 50; //number of query to test per job
         workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
 
         //testrun will reset this based on execution time of test jobs (and resource usage in the future)
@@ -230,13 +229,11 @@ module.exports.run = function(config, status) {
         return deferred.promise;
     }
 
-    function submittest(fastas, part, done) {
-        //status('TESTING', 'Submitting test jobs part:'+part);
-
+    function submittest(fastas, part, submitted, success, resubmit, stopwf) {
         var job = workflow.submit({
             executable: __dirname+'/blast.sh',
             receive: ['output'],
-            timeout: 30*60*1000, //run test for max 30 minutes.. (test should end in 5 - 10 minutes)
+            timeout: 40*60*1000, 
             description: 'test blast job on dbpart:'+part+' with queries:'+fastas.length,
             condor: condor,
 
@@ -249,7 +246,7 @@ module.exports.run = function(config, status) {
                     function(next) {
                         which(config.blast, function(err, path) {
                             if(err) {
-                                done("can't find blast executable:"+config.blast);
+                                stopwf("can't find blast executable:"+config.blast);
                             } else {
                                 //console.log("found path:"+path);
                                 //console.log("config.blast:"+config.blast);
@@ -298,18 +295,22 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submit', function(info) {
-           status("TESTING", job.id+" submitted test job part:"+part);
-            console.log("rundir:"+job.rundir);
+            job._fastas = fastas;
+            job._part = part;
+
+            status("TESTING", job.id+" submitted test job part:"+part);
+            if(submitted) {
+                submitted();
+            }
         });
 
         job.on('submitfail', function(err) {
             workflow.removeall();
-            done('test job submission failed'+err);
+            stopwf('test job submission failed'+err);
         });
 
         job.on('execute', function(info) {
             status("TESTING", job.id+" :: test job part:"+part+" executing on "+job.resource_name);
-            //console.dir(info);//stuff from condor_q
         });
 
         job.on('timeout', function() {
@@ -322,7 +323,7 @@ module.exports.run = function(config, status) {
                     console.log(data);
 
                     workflow.removeall();
-                    done('test timed out');
+                    stopwf('test timed out');
                 }); 
             }); 
         });
@@ -343,7 +344,7 @@ module.exports.run = function(config, status) {
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
                     workflow.removeall();
-                    done('test held');
+                    stopwf('test held');
                 });
             });
         });
@@ -357,39 +358,60 @@ module.exports.run = function(config, status) {
             status('ABORTED', 'Job aborted');
             console.log("job aborted");
             workflow.removeall();
-            done('test aborted');
+            stopwf('test aborted');
         });
 
         job.on('terminate', function(info) {
-            if(info.ret == 0) {
-                workflow.test_job_count+=1;
-                fs.readFile(job.rundir+'/output', {encoding: 'utf8'},  function(err, data) {
-                    if(err) {
-                        status('FAILED', job.id+' test job failed to produce output');
-                        done("test failed - can't read output");
-                    } else {
-                        status('TESTING', job.id+' successfully completed test job in '+info.walltime +' msec :: finished:'+workflow.test_job_count+'/'+workflow.test_job_num);
-                        //start copying output to output directory
-                        fs.createReadStream(job.rundir+'/output')
-                            .pipe(fs.createWriteStream(config.rundir+'/output/test_output.part_'+part));
-                        console.log("----------------------------- test output ---------------------------------");
-                        console.log(data);
-                        console.log("---------------------------------------------------------------------------");
-                        done(null, info.walltime);
-                    }
-                });
-            } else {
-                status('FAILED', job.id+' test job failed on '+job.resource_name+' with code '+info.ret+' - aborting workflow');
-                fs.readFile(job.stdout, 'utf8', function (err,data) {
-                    console.log(data);
-                    fs.readFile(job.stderr, 'utf8', function (err,data) {
-                        console.log(data);
-                        workflow.removeall();
-                        done("test failed");
-                    }); 
-                }); 
-            }
+            var name = 'test_'+part;
+            terminated(job, info, name, success, resubmit, stopwf);
         });
+    }
+
+    //handles both test and real jobs
+    function terminated(job, info, name, success, resubmit, stopwf) {
+        if(info.ret == 0) {
+            //start copying file to rundir
+            fs.createReadStream(job.rundir+'/output')
+                .pipe(fs.createWriteStream(config.rundir+'/output/output.'+name));
+
+            //TODO - what should I do with these information?
+            //console.log(job.id+" max_image_size:"+job.max_image_size+" max_memory_size:"+job.max_memory_usage+" max_resident_set_size:"+job.max_resident_set_size);
+
+            success(job, info);
+        } else if(info.ret > 1 && info.ret < 10) {
+            status('FAILED', job.id+' '+name+' permanently failed.. stopping workflow');
+            var now = new Date();
+            console.log("----------------------------------permanent error---------------------------------");
+            fs.readFile(job.stdout, 'utf8', function (err,data) {
+                console.log("----------------------------------stdout------------------------------------------");
+                console.log(data);
+                fs.writeFile(config.rundir+'/terminated.stdout.'+name+'.'+now.getTime(), data);
+
+                fs.readFile(job.stderr, 'utf8', function (err,data) {
+                    console.log("----------------------------------stderr------------------------------------------");
+                    console.log(data);
+                    fs.writeFile(config.rundir+'/terminated.stderr.'+name+'.'+now.getTime(), data);
+                    stopwf();
+                }); 
+            }); 
+        } else {
+            if(info.ret == 15) {
+                //TODO - send report to GOC-alert
+                console.log("squid server mulfunctioning on site:"+job.resource_name);
+            }
+            status(null, job.id+' '+name+' job failed with code '+info.ret+'.. resubmitting');
+            resubmit(job);
+            fs.readFile(job.stdout, 'utf8', function (err,data) {
+                console.log("----------------------------------stdout------------------------------------------");
+                console.log(data);
+                fs.writeFile(config.rundir+'/terminated.stdout.'+name+'.'+now.getTime(), data);
+            }); 
+            fs.readFile(job.stderr, 'utf8', function (err,data) {
+                console.log("----------------------------------stderr------------------------------------------");
+                console.log(data);
+                fs.writeFile(config.rundir+'/terminated.stderr.'+name+'.'+now.getTime(), data);
+            }); 
+        }
     }
 
     function split_input() {
@@ -495,6 +517,11 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submit', function(info) {
+
+            //store information I need to resubmit later
+            job._block = block;
+            job._dbpart = dbpart;
+
             console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart+" rundir:"+job.rundir);
             submitted(null); //null for err
         });
@@ -508,7 +535,7 @@ module.exports.run = function(config, status) {
 
             //TODO - should I to hold & release instead?
             workflow.remove(job);
-            resubmit(job, block, dbpart);
+            resubmit(job);
         });
 
         job.on('imagesize', function(info) {
@@ -557,49 +584,14 @@ module.exports.run = function(config, status) {
         });
 
         job.on('terminate', function(info) {
-
-            if(info.ret == 0) {
-                //start copying file to rundir
-                fs.createReadStream(job.rundir+'/output')
-                    .pipe(fs.createWriteStream(config.rundir+'/output/output.qb_'+block+'.db_'+dbpart));
-                success(job);
-            } else if(info.ret > 1 && info.ret < 10) {
-                status('FAILED', job.id+' qb:'+block+' db:'+dbpart+' job permanently failed.. stopping workflow');
-
-                var now = new Date();
-                console.log("----------------------------------permanent error---------------------------------");
-                fs.readFile(job.stdout, 'utf8', function (err,data) {
-                    console.log("----------------------------------stdout------------------------------------------");
-                    console.log(data);
-                    fs.writeFile(config.rundir+'/terminated.stdout.qb_'+block+'.db_'+dbpart+'.'+now.getTime(), data);
-
-                    fs.readFile(job.stderr, 'utf8', function (err,data) {
-                        console.log("----------------------------------stderr------------------------------------------");
-                        console.log(data);
-                        fs.writeFile(config.rundir+'/terminated.stderr.qb_'+block+'.db_'+dbpart+'.'+now.getTime(), data);
-                        stopwf();
-                    }); 
-                }); 
-            } else {
-                status('RUNNING', job.id+' qb:'+block+' db:'+dbpart+' job failed with code '+info.ret+'.. resubmitting');
-                resubmit(job, block, dbpart);
-                fs.readFile(job.stdout, 'utf8', function (err,data) {
-                    console.log("----------------------------------stdout------------------------------------------");
-                    console.log(data);
-                    fs.writeFile(config.rundir+'/terminated.stdout.qb_'+block+'.db_'+dbpart+'.'+now.getTime(), data);
-                }); 
-                fs.readFile(job.stderr, 'utf8', function (err,data) {
-                    console.log("----------------------------------stderr------------------------------------------");
-                    console.log(data);
-                    fs.writeFile(config.rundir+'/terminated.stderr.qb_'+block+'.db_'+dbpart+'.'+now.getTime(), data);
-                }); 
-            }
+            var name = 'qb_'+block+'.db_'+dbpart;
+            terminated(job, info, name, success, resubmit, stopwf);
         });
     }
 
     //load fasta blocks to test
     function load_test_fasta() {
-        console.log("loading test fasta");
+        //console.log("loading test fasta");
         var fasta_blocks = [];
         var deferred = Q.defer();
         var file = readblock.open(config.input);
@@ -620,10 +612,105 @@ module.exports.run = function(config, status) {
         return deferred.promise;
     }
 
-    function submit_test_jobs(fasta_blocks) {
+    function submit_tests(fasta_blocks) {
         var deferred = Q.defer();
+        var results = []; //test results
 
-        console.log("creating test jobs with "+fasta_blocks.length);
+        /*
+        async.parallel(test_jobs, function(err, results) {
+            //post_workflow(); //not sure if I should output this at the end of testing
+            if(err) {
+                console.log("Test failed.. waiting all to end");
+                deferred.reject(err);
+            } else {
+            }
+        });
+        */
+
+        function success(job, info) {
+            results.push(info); 
+            status('TESTING', job.id+' test job successfully completed in '+info.walltime+'(msec) :: finished:'+results.length+'/'+fasta_blocks.length);
+
+            //all test completed?
+            if(results.length == fasta_blocks.length) {
+                analyze_results();
+            }
+        }
+
+        function analyze_results() {
+            console.log("test jobs walltimes(msec)");
+            console.dir(results);
+
+            //calculate average time it took to run
+            var sum = results.reduce(function(psum,result) {return psum+result.walltime}, 0);
+            console.log("sum:"+sum);
+            console.log("size:"+results.length);
+            var average = sum / results.length; 
+            console.log("average job walltime(msec):"+average);
+
+            //compute standard deviation
+            var sumd = results.reduce(function(d, result) {
+                var diff = average - result.walltime;
+                return d+diff*diff;
+            }, 0);
+            var sdev = Math.sqrt(sumd/fasta_blocks.length);
+            console.log("standard deviation:"+sdev);
+
+            //check if all values are within sdev
+            //results.forEach(function(result) {
+            //    if(Math.abs(result - average) > sdev) {
+            //        console.log("test result:"+result+" is outside S:"+sdev+" with average:"+average);
+            //        deferred.reject();
+            //        return;
+            //    }
+            //});
+            //console.log("test results ok");
+
+            //calculate optimum query block size
+            workflow.block_size = parseInt(workflow.target_job_duration / average * workflow.test_job_block_size);
+            if(workflow.block_size < 10) {
+                //prevent input query split too small.. (0 is definitely too small)
+                deferred.reject("computed blocksize:"+workflow.block_size+" is too small");
+            } else {
+                console.log("running main workflow with computed block size:" + workflow.block_size);
+                deferred.resolve();
+            }
+        }
+
+        function resubmit(job) {
+            var fastas = job._fastas;
+            var part = job._part;
+
+            status('TESTING', job.id+' re-submitting test job part:'+part);
+            //TODO - check retry count and abort workflow if it's too high
+            //if(retrycount > 4) {
+            //    reject()
+            //} else {
+            submittest(fastas, part, null, success, resubmit, stopwf);
+        }
+
+        function stopwf(err) {
+            //console.log("stopping test");
+            post_workflow();
+            workflow.removeall();
+            deferred.reject(err);
+        }
+
+        //now submit
+        var part = 0;
+        async.whilst(
+            function() { return part<fasta_blocks.length; },
+            function(next_part) {
+                submittest(fasta_blocks[part], part, next_part, success, resubmit, stopwf);
+                part++;
+            },
+            function() {
+                status("TESTING", "submitted all test jobs:"+part);
+            }
+        );
+
+        /*
+        console.log("creating test jobs with "+jobnum);
         var test_jobs = [];
         function pushtestjob(i) {
             fastas = fasta_blocks[i];
@@ -635,52 +722,8 @@ module.exports.run = function(config, status) {
         for(var i in fasta_blocks) {
             pushtestjob(i);
         }
+        */
 
-        async.parallel(test_jobs, function(err, results) {
-            //post_workflow(); //not sure if I should output this at the end of testing
-            if(err) {
-                console.log("Test failed.. waiting all to end");
-                deferred.reject(err);
-            } else {
-                console.log("test jobs walltimes(msec)");
-                console.dir(results);
-
-                //calculate average time it took to run
-                var sum = results.reduce(function(psum,a) {return psum+a});
-                var average = sum / results.length; 
-
-                //compute standard deviation
-                var sumd = results.reduce(function(d, a) {
-                    var diff = average - a;
-                    return d+diff*diff;
-                });
-                var sdev = Math.sqrt(sumd/test_jobs.length);
-                console.log("standard deviation:"+sdev);
-
-                /*
-                //check if all values are within sdev
-                results.forEach(function(result) {
-                    if(Math.abs(result - average) > sdev) {
-                        console.log("test result:"+result+" is outside S:"+sdev+" with average:"+average);
-                        deferred.reject();
-                        return;
-                    }
-                });
-                console.log("test results ok");
-                */
-
-                //calculate optimum query block size
-                workflow.block_size = parseInt(workflow.target_job_duration / average * workflow.test_job_block_size);
-                if(workflow.block_size < 10) {
-                    //prevent input query split too small.. (0 is definitely too small)
-                    console.log("computed blocksize:"+workflow.block_size+" is too small");
-                    deferred.reject();
-                } else {
-                    console.log("running main workflow with computed block size:" + workflow.block_size);
-                    deferred.resolve();
-                }
-            }
-        });
         return deferred.promise;
     }
 
@@ -690,9 +733,9 @@ module.exports.run = function(config, status) {
         var deferred = Q.defer();
 
         console.log("number of blocks:"+blocks+" number of db parts:"+config.dbinfo.parts.length);
-        function success(job) {
+        function success(job, info) {
             jobdone++;
-            status('RUNNING', job.id+' successfully completed :: finished:'+jobdone+'/'+jobnum);
+            status('RUNNING', job.id+' successfully completed in '+info.walltime+'(msec) :: finished:'+jobdone+'/'+jobnum);
 
             //job completed?
             if(jobdone == jobnum) {
@@ -703,8 +746,11 @@ module.exports.run = function(config, status) {
             }
         }
 
-        function resubmit(job, block, dbpart) {
-            status('RUNNING', job.id+' re-submitting');
+        function resubmit(job)  {
+            var block = job._block;
+            var dbpart = job._dbpart;
+
+            status('RUNNING', job.id+' re-submitting qb_'+block+' db_'+dbpart);
             //TODO - check retry count and abort workflow if it's too high
             //if(retrycount > 4) {
             //    reject()
@@ -715,7 +761,7 @@ module.exports.run = function(config, status) {
         function stopwf(err) {
             post_workflow();
             workflow.removeall();
-            deferred.reejct(err);
+            deferred.reject(err);
         }
 
         //now submit

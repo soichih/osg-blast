@@ -10,7 +10,8 @@ if (process.argv.length != 3) {
 
 process.on('uncaughtException', function(err) {
     //TODO send this to GOC?
-    console.log('osg-blast: Caught exception: ' + err);
+    //console.log('osg-blast: Caught exception: ' + err);
+    console.trace(err);
 });
 
 var config_path = path.resolve(process.argv[2]);

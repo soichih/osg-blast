@@ -40,6 +40,22 @@ if [ $oasis_dbpath ]; then
     echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
 else
+
+    #need to deal with squid server..
+    export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
+    if [ "$OSG_SQUID_LOCATION" != UNAVAILABLE ]; then
+        echo "using squid:" $OSG_SQUID_LOCATION
+        export http_proxy=$OSG_SQUID_LOCATION
+        #test squid access
+        wget -q --timeout=3 http://google.com
+        if [ $? ]; then
+            echo "wget failed through squid.."
+            exit 15
+        fi
+    else
+        echo "OSG_SQUID_LOCATION is not set... not using squid"
+    fi
+
     echo "downloading user db from $user_dbpath/$dbname.tar.gz"
     time wget -q --timeout=30 $user_dbpath/$dbname.tar.gz
 
