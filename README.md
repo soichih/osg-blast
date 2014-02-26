@@ -3,7 +3,7 @@
 ncbi-blast workflow submission script
 
 osg-blast submits a workflow to run blast search on a large input queries with a large database. 
-osg-blast is intended to run on Open Science Grid, and via osg-xsede submit host.
+osg-blast is intended to run on Open Science Grid, and via glidein enabled submit host (such as osg-xsede).
 
 # Installation
 
@@ -96,6 +96,23 @@ your job. osg-blast will use ones published via OSG's OASIS.
 If you want to provide your own database, you can do so, but you need to make it available via some webserver where
 each job can download from (through squid).
 
+# Hosted Databases
+
+We currently provide access to following databases.
+
+```
+"db": "oasis:patnt.1-22-2014",
+"db": "oasis:human_genomic.1-22-2014",
+"db": "oasis:nt.1-22-2014",
+"db": "oasis:nr.1-22-2014",
+"db": "oasis:dmel-all-chromosome-r5.55",
+"db": "oasis:htgs.1-22-2014",
+"db": "oasis:pataa.1-22-2014",
+"db": "oasis:swissprot.1-22-2014",
+```
+
+You can use one of these database inside your config.json. If you want to see any other database hosted
+via OSG Oasis, please contact hayashis@iu.edu
 
 # License
 

@@ -28,6 +28,10 @@ if(!config.rundir) {
     var rundir = path.dirname(config_path);
     config.rundir = rundir;
 }
+//set user if it's not set
+if(!config.user) {
+    config.user = process.getuid();
+}
 
 //create pid
 fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
