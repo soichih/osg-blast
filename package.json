@@ -3,7 +3,10 @@
     "version": "2.0.10",
     "description": "blast workflow for open science grid",
     "main": "index.js",
-    "bin": "./bin/osg-blast",
+    "bin": [
+        "./bin/osg-blast",
+        "./bin/osg-blast-merge6"
+    ],
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
