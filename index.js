@@ -86,7 +86,7 @@ module.exports.run = function(config, status) {
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
-                        "(Memory >= 2000) && (Disk >= 10*1024*1024)" //10G should be more than enough enough
+                        "(Memory >= 1967) && (Disk >= 10*1024*1024)" //10G should be more than enough enough
     }
 
     var workflow = new osg.Workflow();
