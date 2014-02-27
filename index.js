@@ -246,7 +246,7 @@ module.exports.run = function(config, status) {
                     function(next) {
                         which(config.blast, function(err, path) {
                             if(err) {
-                                stopwf("can't find blast executable:"+config.blast);
+                                stopwf('FAILED', "can't find blast executable:"+config.blast);
                             } else {
                                 //console.log("found path:"+path);
                                 //console.log("config.blast:"+config.blast);
@@ -306,7 +306,7 @@ module.exports.run = function(config, status) {
 
         job.on('submitfail', function(err) {
             workflow.removeall();
-            stopwf('test job submission failed'+err);
+            stopwf('FAILED', 'test job submission failed'+err);
         });
 
         job.on('execute', function(info) {
@@ -314,7 +314,6 @@ module.exports.run = function(config, status) {
         });
 
         job.on('timeout', function() {
-            status('FAILED', 'test job timed out on '+job.resource_name+' .. aborting');
             console.log("---------------------------stdout------------------------- "+job.stdout);
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log(data);
@@ -323,7 +322,7 @@ module.exports.run = function(config, status) {
                     console.log(data);
 
                     workflow.removeall();
-                    stopwf('test timed out');
+                    stopwf('FAILED', 'test job timed out on '+job.resource_name+'.. aborting');
                 }); 
             }); 
         });
@@ -340,14 +339,13 @@ module.exports.run = function(config, status) {
         });
 
         job.on('hold', function(info) {
-            status('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
             console.dir(info);
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log(data);
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
                     workflow.removeall();
-                    stopwf('test held');
+                    stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
                 });
             });
         });
@@ -358,10 +356,8 @@ module.exports.run = function(config, status) {
         });
 
         job.on('abort', function(info) {
-            status('ABORTED', 'Job aborted');
-            console.log("job aborted");
             workflow.removeall();
-            stopwf('test aborted');
+            stopwf('ABORTED', 'test aborted');
         });
 
         job.on('terminate', function(info) {
@@ -383,7 +379,6 @@ module.exports.run = function(config, status) {
 
             success(job, info);
         } else if(info.ret > 1 && info.ret < 10) {
-            status('FAILED', job.id+' '+name+' permanently failed.. stopping workflow');
             console.log("----------------------------------permanent error---------------------------------");
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");
@@ -394,7 +389,7 @@ module.exports.run = function(config, status) {
                     console.log("----------------------------------stderr------------------------------------------");
                     console.log(data);
                     fs.writeFile(config.rundir+'/terminated.stderr.'+name+'.'+now.getTime(), data);
-                    stopwf();
+                    stopwf('FAILED', job.id+' '+name+' permanently failed.. stopping workflow');
                 }); 
             }); 
         } else {
@@ -568,8 +563,7 @@ module.exports.run = function(config, status) {
                         workflow.release(job);
                     }, 60*1000);
                 } else {
-                    status('FAILED', 'Job:'+job.id+' ran too many times:'+job.job.JobRunCount+' .. aborting workflow. ');
-                    stopwf();
+                    stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+job.job.JobRunCount+' .. aborting workflow. ');
                 }
             });
         });
@@ -586,8 +580,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('abort', function(info) {
-            status('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
-            stopwf();
+            stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
         });
 
         job.on('terminate', function(info) {
@@ -696,11 +689,11 @@ module.exports.run = function(config, status) {
             submittest(fastas, part, null, success, resubmit, stopwf);
         }
 
-        function stopwf(err) {
-            //console.log("stopping test");
+        function stopwf(st, err) {
+            status(st, err);
             post_workflow();
             workflow.removeall();
-            deferred.reject(err);
+            deferred.reject(st+" :: " + err);
         }
 
         //now submit
@@ -765,10 +758,11 @@ module.exports.run = function(config, status) {
             submitjob(block, dbpart, function() {}, success, resubmit, stopwf);
         }
 
-        function stopwf(err) {
+        function stopwf(st, err) {
+            status(st, err);
             post_workflow();
             workflow.removeall();
-            deferred.reject(err);
+            deferred.reject(st+" :: " + err);
         }
 
         //now submit
