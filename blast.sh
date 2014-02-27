@@ -3,6 +3,9 @@
 echo "sourcing params";
 cat params.sh
 
+echo "prevent condor to issue hold event before terminating with any error code"
+touch output
+
 source ./params.sh
 
 #export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
@@ -40,15 +43,17 @@ if [ $oasis_dbpath ]; then
     echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
 else
+    echo "downloading user db - through squid";
 
-    #need to deal with squid server..
+    #need to deal with squid server.. https://twiki.grid.iu.edu/bin/view/Documentation/OsgHttpBasics
     export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
     if [ "$OSG_SQUID_LOCATION" != UNAVAILABLE ]; then
         echo "using squid:" $OSG_SQUID_LOCATION
         export http_proxy=$OSG_SQUID_LOCATION
-        #test squid access
-        wget -q --timeout=3 http://google.com
-        if [ $? ]; then
+
+        #test squid access (and throughput... TODO - I need to use reliable, but large enough test data)
+        wget -q --timeout=2 http://google.com
+        if [ $? -ne 0 ]; then
             echo "wget failed through squid.."
             exit 15
         fi

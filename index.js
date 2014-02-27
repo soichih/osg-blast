@@ -334,6 +334,9 @@ module.exports.run = function(config, status) {
 
         job.on('exception', function(info) {
             console.log(job.id+' test:'+part+' threw exception on '+job.resource_name+' :: '+info.Message);
+            if(config.opissue_log) {
+                fs.appendFile(config.opissue_log, job.id+' test:'+part+' exception on '+job.resource_name+' :: '+info.Message+"\n");
+            }
         });
 
         job.on('hold', function(info) {
@@ -369,6 +372,7 @@ module.exports.run = function(config, status) {
 
     //handles both test and real jobs
     function terminated(job, info, name, success, resubmit, stopwf) {
+        var now = new Date();
         if(info.ret == 0) {
             //start copying file to rundir
             fs.createReadStream(job.rundir+'/output')
@@ -380,7 +384,6 @@ module.exports.run = function(config, status) {
             success(job, info);
         } else if(info.ret > 1 && info.ret < 10) {
             status('FAILED', job.id+' '+name+' permanently failed.. stopping workflow');
-            var now = new Date();
             console.log("----------------------------------permanent error---------------------------------");
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");
@@ -396,8 +399,9 @@ module.exports.run = function(config, status) {
             }); 
         } else {
             if(info.ret == 15) {
-                //TODO - send report to GOC-alert
-                console.log("squid server mulfunctioning on site:"+job.resource_name);
+                if(config.opissue_log) {
+                    fs.appendFile(config.opissue_log, "squid server mulfunctioning on site:"+job.resource_name+"\n");
+                }
             }
             status(null, job.id+' '+name+' job failed with code '+info.ret+'.. resubmitting');
             resubmit(job);
@@ -576,6 +580,9 @@ module.exports.run = function(config, status) {
 
         job.on('exception', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message);
+            if(config.opissue_log) {
+                fs.appendFile(config.opissue_log, job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message+"\n");
+            }
         });
 
         job.on('abort', function(info) {

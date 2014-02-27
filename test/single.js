@@ -11,7 +11,7 @@ var condor = {
     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
     //"Requirements": "(GLIDEIN_ResourceName == \"SPRACE\") && (Memory >= 2000) && (Disk >= 500*1024*1024)"
     //"Requirements": "(GLIDEIN_ResourceName == \"Tursker\")"
-    "Requirements": "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && (GLIDEIN_ResourceName == \"Sandhills\")"
+    "Requirements": "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && (GLIDEIN_ResourceName == \"CIT_CMS_T2\")"
 } 
 
 var workflow = new osg.Workflow();
