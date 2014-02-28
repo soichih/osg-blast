@@ -1,12 +1,12 @@
 {
     "name": "osg-blast",
-    "version": "2.0.13",
+    "version": "2.0.14",
     "description": "blast workflow for open science grid",
     "main": "index.js",
-    "bin": [
-        "./bin/osg-blast",
-        "./bin/osg-blast-merge6"
-    ],
+    "bin": {
+        "osg-blast": "./bin/osg-blast",
+        "osg-blast-merge6": "./bin/osg-blast-merge6"
+    },
     "scripts": {
         "test": "echo \"Error: no test specified\" && exit 1"
     },
