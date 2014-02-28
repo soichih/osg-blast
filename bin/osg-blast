@@ -4,12 +4,15 @@ var fs = require('fs');
 var path = require('path');
 var osgblast = require("../");
 
-if (process.argv.length != 3) {
-    console.log("please pass location to config.json in the first argument");
+var config_path;
+if (process.argv.length == 3) {
+    config_path = process.argv[2];
+} else {
+    console.log("config.json path not specified.. using local directory");
+    config_path = "config.json";
 }
-
-
-var config_path = path.resolve(process.argv[2]);
+//console.log("using config path:"+config_path);
+config_path = path.resolve(config_path);
 
 if(!fs.existsSync(config_path)) {
     console.log("failed to find config:"+config_path);

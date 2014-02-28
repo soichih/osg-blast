@@ -139,13 +139,13 @@ module.exports.run = function(config, status) {
                     config.dbinfo = load_db_info(data);
                     deferred.resolve(); 
                 } else {
-                    console.log("failed.. now trying downloading "+apath+".nal");
+                    console.log("now trying to downloading "+apath+".nal");
                     http_get(apath+".nal", function(err, data) {
                         if(data) {
                             config.dbinfo = load_db_info(data);
                             deferred.resolve(); 
                         } else {
-                            console.log("failed.. must be a single db");
+                            console.log("it must be a single db");
                             //single part db
                             config.dbinfo = {
                                 title: config._db_name, //TODO - pull real name from db somehow?
@@ -188,7 +188,7 @@ module.exports.run = function(config, status) {
     function prepare() {
         //set some extra attributes for our workflow
         workflow.test_job_num = 5; //number of jobs to submit for test
-        workflow.test_job_block_size = 50; //number of query to test per job
+        workflow.test_job_block_size = 32; //number of query to test per job
         workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
 
         //testrun will reset this based on execution time of test jobs (and resource usage in the future)
@@ -389,7 +389,7 @@ module.exports.run = function(config, status) {
                     console.log("----------------------------------stderr------------------------------------------");
                     console.log(data);
                     fs.writeFile(config.rundir+'/terminated.stderr.'+name+'.'+now.getTime(), data);
-                    stopwf('FAILED', job.id+' '+name+' permanently failed.. stopping workflow');
+                    stopwf('FAILED', job.id+' '+name+' permanently failed (code '+info.ret+').. stopping workflow');
                 }); 
             }); 
         } else {
@@ -398,7 +398,7 @@ module.exports.run = function(config, status) {
                     fs.appendFile(config.opissue_log, "squid server mulfunctioning on site:"+job.resource_name+"\n");
                 }
             }
-            status(null, job.id+' '+name+' job failed with code '+info.ret+'.. resubmitting');
+            status(null, job.id+' '+name+' temporarily failed (code '+info.ret+').. resubmitting');
             resubmit(job);
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");
