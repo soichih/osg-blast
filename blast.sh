@@ -63,6 +63,10 @@ else
 
     echo "downloading user db from $user_dbpath/$dbname.tar.gz"
     time wget -q --timeout=30 $user_dbpath/$dbname.tar.gz
+    if [ $? -ne 0 ]; then 
+        echo "failed to download $user_dbpath/$dbname.tar.gz"
+        exit 16
+    fi
 
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
     mkdir blastdb

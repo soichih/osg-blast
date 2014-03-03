@@ -1,7 +1,7 @@
 #!/bin/bash
 
-#echo "listing";
-#condor_status -format '%s' GLIDEIN_ResourceName -format ' %s\n' HAS_CVMFS_oasis_opensciencegrid_org | sort | uniq
+echo "listing";
+condor_status -format '%s' GLIDEIN_ResourceName -format ' %s\n' HAS_CVMFS_oasis_opensciencegrid_org | sort | uniq
 
 #echo "listing all site where I can currently submit jobs to"
 echo "following site claims to have oasis \n\n";

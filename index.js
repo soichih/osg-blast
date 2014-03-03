@@ -81,12 +81,16 @@ module.exports.run = function(config, status) {
         "+ProjectName": config.project,
         "+PortalUser": config.user,
 
+        //TODO - untested -- is this really a good idea?
+        "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
+
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
                         //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
-                        "(Memory >= 1967) && (Disk >= 10*1024*1024)" //10G should be more than enough enough
+                        "(Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
+                        "(Disk >= 10*1024*1024)" //10G should be more than enough enough
     }
 
     var workflow = new osg.Workflow();
@@ -129,6 +133,7 @@ module.exports.run = function(config, status) {
             config._db_name = dbtokens.pop(); //grab last 
             config._user_dbpath = dbtokens.join(":");
 
+            console.log("outputting user db config again");
             console.dir(config);
 
             //try downloading pal
@@ -187,6 +192,7 @@ module.exports.run = function(config, status) {
 
     function prepare() {
         //set some extra attributes for our workflow
+        workflow.test_resubmits = 10; //max number of time test job should be resubmitted
         workflow.test_job_num = 5; //number of jobs to submit for test
         workflow.test_job_block_size = 32; //number of query to test per job
         workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
@@ -305,7 +311,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submitfail', function(err) {
-            workflow.removeall();
+            //workflow.remove();
             stopwf('FAILED', 'test job submission failed'+err);
         });
 
@@ -321,7 +327,7 @@ module.exports.run = function(config, status) {
                     console.log("---------------------------stderr-------------------------"+job.stderr);
                     console.log(data);
 
-                    workflow.removeall();
+                    //workflow.remove();
                     stopwf('FAILED', 'test job timed out on '+job.resource_name+'.. aborting');
                 }); 
             }); 
@@ -344,7 +350,7 @@ module.exports.run = function(config, status) {
                 console.log(data);
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
-                    workflow.removeall();
+                    //workflow.remove();
                     stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
                 });
             });
@@ -356,7 +362,7 @@ module.exports.run = function(config, status) {
         });
 
         job.on('abort', function(info) {
-            workflow.removeall();
+            //workflow.remove();
             stopwf('ABORTED', 'test aborted');
         });
 
@@ -533,7 +539,7 @@ module.exports.run = function(config, status) {
             console.log(job.id+" timed out - resubmitting qb:"+block+" dbpart:"+dbpart);
 
             //TODO - should I to hold & release instead?
-            workflow.remove(job);
+            job.remove(); 
             resubmit(job);
         });
 
@@ -557,13 +563,13 @@ module.exports.run = function(config, status) {
                 fs.writeFile(config.rundir+'/held.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
             }); 
             job.q(function(err, data) {
-                if(job.JobRunCount < 3) {
-                    console.log(job.id+" JobRunCount: "+job.JobRunCount+" ... releasing in 60 seconds");
+                if(data.JobRunCount < 3) {
+                    console.log(job.id+" JobRunCount: "+data.JobRunCount+" ... releasing in 60 seconds");
                     setTimeout(function() {
                         workflow.release(job);
                     }, 60*1000);
                 } else {
-                    stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+job.job.JobRunCount+' .. aborting workflow. ');
+                    stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
                 }
             });
         });
@@ -681,18 +687,23 @@ module.exports.run = function(config, status) {
             var fastas = job._fastas;
             var part = job._part;
 
-            status('TESTING', job.id+' re-submitting test job part:'+part);
-            //TODO - check retry count and abort workflow if it's too high
-            //if(retrycount > 4) {
-            //    reject()
-            //} else {
-            submittest(fastas, part, null, success, resubmit, stopwf);
+            if(workflow.test_resubmits > 0) {
+                status('TESTING', job.id+' re-submitting test job part:'+part);
+                //TODO - check retry count and abort workflow if it's too high
+                //if(retrycount > 4) {
+                //    reject()
+                //} else {
+                submittest(fastas, part, null, success, resubmit, stopwf);
+                workflow.test_resubmits--;
+            } else {
+                stopwf('FAILED', ' test job re-submited too many times '+workflow.test_resubmits+'... aborting workflow. ');
+            }
         }
 
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.removeall();
+            workflow.remove();
             deferred.reject(st+" :: " + err);
         }
 
@@ -732,6 +743,8 @@ module.exports.run = function(config, status) {
         var jobdone = 0;
         var deferred = Q.defer();
 
+        var resubmitted = {}; //list of jobs that are resubmited, and count
+
         console.log("number of blocks:"+blocks+" number of db parts:"+config.dbinfo.parts.length);
         function success(job, info) {
             jobdone++;
@@ -750,18 +763,32 @@ module.exports.run = function(config, status) {
             var block = job._block;
             var dbpart = job._dbpart;
 
-            status('RUNNING', job.id+' re-submitting qb_'+block+' db_'+dbpart);
-            //TODO - check retry count and abort workflow if it's too high
-            //if(retrycount > 4) {
-            //    reject()
-            //} else {
-            submitjob(block, dbpart, function() {}, success, resubmit, stopwf);
+            //count number of time this job has been resubmitted
+            var jid = block+"."+dbpart;
+            if(!resubmitted[jid]) {
+                resubmitted[jid] = 0;
+            }
+            resubmitted[jid]++;
+        
+            if(resubmitted[jid] > 5) {
+                status('FALED', 'job:'+jid+' re-submitted too many times');
+                post_workflow();
+                workflow.remove();
+                deferred.reject(st+" :: " + 'job:'+jid+' re-submitted too many times');
+            } else {
+                status('RUNNING', job.id+' re-submitting qb_'+block+' db_'+dbpart);
+                //TODO - check retry count and abort workflow if it's too high
+                //if(retrycount > 4) {
+                //    reject()
+                //} else {
+                submitjob(block, dbpart, function() {}, success, resubmit, stopwf);
+            }
         }
 
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.removeall();
+            workflow.remove();
             deferred.reject(st+" :: " + err);
         }
 
