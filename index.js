@@ -311,7 +311,6 @@ module.exports.run = function(config, status) {
         });
 
         job.on('submitfail', function(err) {
-            //workflow.remove();
             stopwf('FAILED', 'test job submission failed'+err);
         });
 
@@ -319,6 +318,7 @@ module.exports.run = function(config, status) {
             status("TESTING", job.id+" :: test job part:"+part+" executing on "+job.resource_name);
         });
 
+        /*
         job.on('timeout', function() {
             console.log("---------------------------stdout------------------------- "+job.stdout);
             fs.readFile(job.stdout, 'utf8', function (err,data) {
@@ -327,11 +327,11 @@ module.exports.run = function(config, status) {
                     console.log("---------------------------stderr-------------------------"+job.stderr);
                     console.log(data);
 
-                    //workflow.remove();
                     stopwf('FAILED', 'test job timed out on '+job.resource_name+'.. aborting');
                 }); 
             }); 
         });
+        */
 
         job.on('imagesize', function(info) {
             console.log(job.id+' test:'+part+' imagesize '+JSON.stringify(info));
@@ -350,7 +350,6 @@ module.exports.run = function(config, status) {
                 console.log(data);
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
-                    //workflow.remove();
                     stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
                 });
             });
@@ -362,7 +361,6 @@ module.exports.run = function(config, status) {
         });
 
         job.on('abort', function(info) {
-            //workflow.remove();
             stopwf('ABORTED', 'test aborted');
         });
 
@@ -463,6 +461,9 @@ module.exports.run = function(config, status) {
             receive: ['output'],
             //arguments: [],
             timeout: 3*60*60*1000, //kill job in 3 hours (job should finish in 1.5 hours)
+
+            //timeout: 60*1000, //debug.. 1 minutes
+
             description: 'blast query block:'+block+' on dbpart:'+dbpart,
 
             debug: config.debug,
@@ -535,6 +536,7 @@ module.exports.run = function(config, status) {
             submitted(err); //null for err
         });
 
+        /*
         job.on('timeout', function(info) {
             console.log(job.id+" timed out - resubmitting qb:"+block+" dbpart:"+dbpart);
 
@@ -542,34 +544,51 @@ module.exports.run = function(config, status) {
             job.remove(); 
             resubmit(job);
         });
+        */
 
         job.on('imagesize', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' imagesize update '+JSON.stringify(info));
         });
 
         job.on('hold', function(info) {
+            //console.log(job.id + 'held');
+            //console.dir(info);
+
             var now = new Date();
-            //TODO - report issue to goc?
-            console.log("----------------------------------"+job.id+" held---------------------------------");
-            console.dir(info);
-            fs.readFile(job.stdout, 'utf8', function (err,data) {
-                console.log("----------------------------------stdout------------------------------------------");
-                console.log(data);
-                fs.writeFile(config.rundir+'/held.stdout.'+block+'.'+dbpart+'.'+now.getTime(), data);
-            }); 
-            fs.readFile(job.stderr, 'utf8', function (err,data) {
-                console.log("----------------------------------stderr------------------------------------------");
-                console.log(data);
-                fs.writeFile(config.rundir+'/held.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
-            }); 
             job.q(function(err, data) {
-                if(data.JobRunCount < 3) {
-                    console.log(job.id+" JobRunCount: "+data.JobRunCount+" ... releasing in 60 seconds");
-                    setTimeout(function() {
-                        workflow.release(job);
-                    }, 60*1000);
+                if(err) {
+                    stopwf('FAILED', job.id+' qb:'+block+' db:'+dbpart+" held but couldn't run condor_q .. aborting workflow :"+err);
                 } else {
-                    stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
+                    console.dir(data);
+                    if(data.JobRunCount < 3) {
+                        switch(info.HoldReasonSubCode) {
+                        case 1: //timeout
+                            console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. JobRunCount: "+data.JobRunCount+" ... releasing");
+                            job.release();
+                            break;
+                        default: 
+                            //TODO - report issue to goc?
+                            console.log(typeof info.HoldReasonSubCode);
+                            console.log(job.id+' qb:'+block+' db:'+dbpart+" Unknown hold subcode:"+info.HoldReasonSubCode);
+                            console.dir(info);
+                            console.log("----------------------------------"+job.id+" held---------------------------------");
+                            console.dir(info);
+                            fs.readFile(job.stdout, 'utf8', function (err,data) {
+                                console.log("----------------------------------stdout------------------------------------------");
+                                console.log(data);
+                                fs.writeFile(config.rundir+'/held.stdout.'+block+'.'+dbpart+'.'+now.getTime(), data);
+                            }); 
+                            fs.readFile(job.stderr, 'utf8', function (err,data) {
+                                console.log("----------------------------------stderr------------------------------------------");
+                                console.log(data);
+                                fs.writeFile(config.rundir+'/held.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
+                            }); 
+                            console.log(job.id+' qb:'+block+' db:'+dbpart+" JobRunCount: "+data.JobRunCount+" ... releasing");
+                            job.release();
+                        }
+                    } else {
+                        stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
+                    }
                 }
             });
         });
@@ -771,10 +790,7 @@ module.exports.run = function(config, status) {
             resubmitted[jid]++;
         
             if(resubmitted[jid] > 5) {
-                status('FALED', 'job:'+jid+' re-submitted too many times');
-                post_workflow();
-                workflow.remove();
-                deferred.reject(st+" :: " + 'job:'+jid+' re-submitted too many times');
+                stopwf('FALED', 'job:'+jid+' re-submitted too many times');
             } else {
                 status('RUNNING', job.id+' re-submitting qb_'+block+' db_'+dbpart);
                 //TODO - check retry count and abort workflow if it's too high
