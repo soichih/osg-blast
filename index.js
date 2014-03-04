@@ -101,7 +101,7 @@ module.exports.run = function(config, status) {
         var dbtokens = config.db.split(":");
         if(dbtokens[0] == "oasis") {
             //add oasis requirements for condor Requirements
-            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1687) && "+condor.Requirements;
+            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
 
             console.log("processing oasis dbinfo");
             //config._db_type = "oasis";
