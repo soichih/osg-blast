@@ -382,7 +382,7 @@ module.exports.run = function(config, status) {
             //console.log(job.id+" max_image_size:"+job.max_image_size+" max_memory_size:"+job.max_memory_usage+" max_resident_set_size:"+job.max_resident_set_size);
 
             success(job, info);
-        } else if(info.ret > 1 && info.ret < 10) {
+        } else if(info.ret > 0 && info.ret < 10) {
             console.log("----------------------------------permanent error---------------------------------");
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");

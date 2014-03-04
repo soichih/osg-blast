@@ -34,8 +34,8 @@ if [ $oasis_dbpath ]; then
     ls -lart $oasis_dbpath
 
     if [ ! -f $oasis_dbpath/$dbname.tar.gz ]; then
-        echo "can't find $dbname.tar.gz in oasis"
-        exit 68
+        echo "can't access oasis, but can't find $dbname.tar.gz - probably wrong dbname?"
+        exit 3
     fi
 
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
@@ -112,11 +112,11 @@ case $blast_ret in
     ;;
 1)
     echo "Error in query sequence(s) or BLAST options"
-    exit 1
+    exit 1 #input error
     ;;
 2)
     echo "Error in blast database"
-    exit 1 #I am not sure which error code to use for this..
+    exit 1 #input error
     ;;
 3)
     echo "Error in blast engine"
