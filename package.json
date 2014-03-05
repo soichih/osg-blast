@@ -5,7 +5,7 @@
     "main": "index.js",
     "bin": {
         "osg-blast": "./bin/osg-blast",
-        "osg-blast-merge5": "./bin/osg-blast-merge5"
+        "osg-blast-merge5": "./bin/osg-blast-merge5",
         "osg-blast-merge6": "./bin/osg-blast-merge6"
     },
     "scripts": {
