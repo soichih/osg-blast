@@ -42,6 +42,11 @@ if [ $oasis_dbpath ]; then
     mkdir blastdb
     echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
+
+    if [ $? -ne 0 ]; then 
+        echo "failed to untar $oasis_dbpath/$dbname.tar.gz"
+        exit 3
+    fi
 else
     echo "downloading user db - through squid";
 
@@ -77,8 +82,6 @@ ls -lart blastdb
 
 echo "head of $inputquery"
 head -20 $inputquery
-
-#cat $inputquery
 
 echo "running blast"
 #-outfmt 5 : xml

@@ -206,6 +206,12 @@ module.exports.run = function(config, status) {
             console.log("using input path:"+config.input);
         }
 
+        //let user override the test block size (for really slow queries)
+        if(config.test_job_block_size) {
+            console.log("Setting test_job_block_size:"+config.test_job_block_size);
+            workflow.test_job_block_size = config.test_job_block_size;
+        }
+
         var deferred = Q.defer();
         async.series([
             function(next) {
