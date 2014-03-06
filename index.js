@@ -138,13 +138,13 @@ module.exports.run = function(config, status) {
 
             //try downloading pal
             var apath = config._user_dbpath+"/"+config._db_name;
-            console.log("trying downloading "+apath+".pal");
+            console.log("trying to download "+apath+".pal");
             http_get(apath+".pal", function(err, data) {
                 if(data) {
                     config.dbinfo = load_db_info(data);
                     deferred.resolve(); 
                 } else {
-                    console.log("now trying to downloading "+apath+".nal");
+                    console.log("trying to download "+apath+".nal");
                     http_get(apath+".nal", function(err, data) {
                         if(data) {
                             config.dbinfo = load_db_info(data);
@@ -321,7 +321,10 @@ module.exports.run = function(config, status) {
         });
 
         job.on('execute', function(info) {
-            status("TESTING", job.id+" :: test job part:"+part+" executing on "+job.resource_name);
+            console.log(job.id+" :: test job part:"+part+" executing");
+        });
+        job.on('q', function(info) {
+            status(null, job.id+" :: test job part:"+part+" running on "+job.resource_name);
         });
 
         /*
@@ -598,18 +601,18 @@ module.exports.run = function(config, status) {
                 }
             });
         });
-
         job.on('execute', function(info) {
-            console.log(job.id+' qb:'+block+' db:'+dbpart+' started running on '+job.resource_name+' rundir:'+_rundir);
+            //console.log(job.id+' qb:'+block+' db:'+dbpart+' started with rundir:'+_rundir);
         });
-
+        job.on('q', function(info) {
+            status(null, job.id+" qb:"+block+" db:"+dbpart+" running on "+job.resource_name + " rundir:"+_rundir);
+        });
         job.on('exception', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message);
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message+"\n");
             }
         });
-
         job.on('abort', function(info) {
             stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
         });

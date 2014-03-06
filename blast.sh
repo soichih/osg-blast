@@ -34,7 +34,7 @@ if [ $oasis_dbpath ]; then
     ls -lart $oasis_dbpath
 
     if [ ! -f $oasis_dbpath/$dbname.tar.gz ]; then
-        echo "can't access oasis, but can't find $dbname.tar.gz - probably wrong dbname?"
+        echo "can access oasis, but can't find $oasis_dbpath/$dbname.tar.gz - probably wrong dbname?"
         exit 3
     fi
 
@@ -44,8 +44,8 @@ if [ $oasis_dbpath ]; then
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
 
     if [ $? -ne 0 ]; then 
-        echo "failed to untar $oasis_dbpath/$dbname.tar.gz"
-        exit 3
+        echo "failed to untar $oasis_dbpath/$dbname.tar.gz - let's retry.."
+        exit 16
     fi
 else
     echo "downloading user db - through squid";

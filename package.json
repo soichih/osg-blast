@@ -1,6 +1,6 @@
 {
     "name": "osg-blast",
-    "version": "2.0.18",
+    "version": "2.0.19",
     "description": "blast workflow for open science grid",
     "main": "index.js",
     "bin": {
