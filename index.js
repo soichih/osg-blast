@@ -1,5 +1,6 @@
 var http = require('http');
 var fs = require('fs');
+var extend = require('util')._extend;
 
 var osg = require('osg');
 var readblock = require('readblock');
@@ -63,6 +64,11 @@ module.exports.run = function(config, status) {
 
     //console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
     //console.dir(config);
+
+    //some default
+    config = extend({
+        tmpdir: '/tmp'
+    }, config); 
 
     /* config should look like
     {
@@ -250,6 +256,7 @@ module.exports.run = function(config, status) {
             condor: condor,
 
             debug: config.debug,
+            tmpdir: config.tmpdir,
 
             //use callback function to auto-generate rundir and let me put stuff to it
             rundir: function(rundir, done_prepare) {
@@ -476,6 +483,7 @@ module.exports.run = function(config, status) {
             description: 'blast query block:'+block+' on dbpart:'+dbpart,
 
             debug: config.debug,
+            tmpdir: config.tmpdir,
 
             condor: condor,
             rundir: function(rundir, done_prepare) {
