@@ -1,5 +1,10 @@
 #!/bin/bash
 
+echo "hostname" `hostname`
+
+echo "OSG env"
+set | grep OSG
+
 echo "sourcing params";
 cat params.sh
 
