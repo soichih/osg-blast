@@ -101,6 +101,18 @@ module.exports.run = function(config, status) {
 
     var workflow = new osg.Workflow();
 
+    //output operational log (if config.oplog is set)
+    function oplog(log) {
+        if(config.oplog) {
+            log.date =  new Date();
+            fs.appendFile(config.oplog, JSON.stringify(log, null, 4)+"\n",  function (err) {
+                if(err) {
+                    console.log("failed to output oplog:"+config.oplog+"\n"+err);
+                }
+            }); 
+        }
+    }
+
     function load_dbinfo(res, next) {
         var deferred = Q.defer();
 
@@ -266,6 +278,7 @@ module.exports.run = function(config, status) {
                         which(config.blast, function(err, path) {
                             if(err) {
                                 stopwf('FAILED', "can't find blast executable:"+config.blast);
+                                oplog({job: job, part: part, msg: "can't find blast executable:"+config.blast});
                             } else {
                                 //console.log("found path:"+path);
                                 //console.log("config.blast:"+config.blast);
@@ -325,6 +338,7 @@ module.exports.run = function(config, status) {
 
         job.on('submitfail', function(err) {
             stopwf('FAILED', 'test job submission failed'+err);
+            oplog({job: job, part: part, msg: "test job submission failed", err:err});
         });
 
         job.on('execute', function(info) {
@@ -355,9 +369,12 @@ module.exports.run = function(config, status) {
 
         job.on('exception', function(info) {
             console.log(job.id+' test:'+part+' threw exception on '+job.resource_name+' :: '+info.Message);
+            oplog({job: job, part: part, info: info});
+            /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' test:'+part+' exception on '+job.resource_name+' :: '+info.Message+"\n");
             }
+            */
         });
 
         job.on('hold', function(info) {
@@ -367,6 +384,7 @@ module.exports.run = function(config, status) {
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
                     stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
+                    oplog({job: job, part: part, msg: "test job held", info:info});
                 });
             });
         });
@@ -410,13 +428,17 @@ module.exports.run = function(config, status) {
                     console.log(data);
                     fs.writeFile(config.rundir+'/terminated.stderr.'+name+'.'+now.getTime(), data);
                     stopwf('FAILED', job.id+' '+name+' permanently failed (code '+info.ret+').. stopping workflow');
+                    //oplog({job: job, msg: "job failed permanently", info:info});
                 }); 
             }); 
         } else {
             if(info.ret == 15) {
+                oplog({msg : "squid server mulfunctioning at site: "+job.resource_name});
+                /*
                 if(config.opissue_log) {
                     fs.appendFile(config.opissue_log, "squid server mulfunctioning on site:"+job.resource_name+"\n");
                 }
+                */
             }
             status(null, job.id+' '+name+' temporarily failed (code '+info.ret+').. resubmitting');
             resubmit(job);
@@ -565,16 +587,19 @@ module.exports.run = function(config, status) {
 
         job.on('imagesize', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' imagesize update '+JSON.stringify(info));
+            oplog({info: info});
         });
 
         job.on('hold', function(info) {
             //console.log(job.id + 'held');
             //console.dir(info);
+            oplog({job: job, msg: "hold event", info: info});
 
             var now = new Date();
             job.q(function(err, data) {
                 if(err) {
                     stopwf('FAILED', job.id+' qb:'+block+' db:'+dbpart+" held but couldn't run condor_q .. aborting workflow :"+err);
+                    oplog({job: job, msg: "condor_q failed", err: err});
                 } else {
                     console.dir(data);
                     if(data.JobRunCount < 3) {
@@ -584,27 +609,29 @@ module.exports.run = function(config, status) {
                             job.release();
                             break;
                         default: 
-                            //TODO - report issue to goc?
-                            console.log(typeof info.HoldReasonSubCode);
-                            console.log(job.id+' qb:'+block+' db:'+dbpart+" Unknown hold subcode:"+info.HoldReasonSubCode);
-                            console.dir(info);
-                            console.log("----------------------------------"+job.id+" held---------------------------------");
-                            console.dir(info);
+                            //console.log(typeof info.HoldReasonSubCode);
                             fs.readFile(job.stdout, 'utf8', function (err,data) {
-                                console.log("----------------------------------stdout------------------------------------------");
+                                console.log("------stdout-------");
                                 console.log(data);
                                 fs.writeFile(config.rundir+'/held.stdout.'+block+'.'+dbpart+'.'+now.getTime(), data);
                             }); 
                             fs.readFile(job.stderr, 'utf8', function (err,data) {
-                                console.log("----------------------------------stderr------------------------------------------");
+                                console.log("------stderr-------");
                                 console.log(data);
                                 fs.writeFile(config.rundir+'/held.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
                             }); 
+
+                            console.log("Unknown hold subcode:"+info.HoldReasonSubCode);
                             console.log(job.id+' qb:'+block+' db:'+dbpart+" JobRunCount: "+data.JobRunCount+" ... releasing");
+                            console.dir(info);
+
+                            oplog({job: job, data: data, info: info});
+
                             job.release();
                         }
                     } else {
                         stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
+                        oplog({job: job, msg: "ran too many times.. aborting workflow", data: data});
                     }
                 }
             });
@@ -617,9 +644,12 @@ module.exports.run = function(config, status) {
         });
         job.on('exception', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message);
+            oplog({job: job, block: block, dbpart: dbpart, info: info});
+            /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message+"\n");
             }
+            */
         });
         job.on('abort', function(info) {
             stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
@@ -733,6 +763,7 @@ module.exports.run = function(config, status) {
                 workflow.test_resubmits--;
             } else {
                 stopwf('FAILED', ' test job re-submited too many times '+workflow.test_resubmits+'... aborting workflow. ');
+                oplog({job: job, msg: "test job re-submitted too many times"});
             }
         }
 

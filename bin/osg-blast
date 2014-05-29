@@ -11,7 +11,6 @@ if (process.argv.length == 3) {
     console.log("config.json path not specified.. using local directory");
     config_path = "config.json";
 }
-//console.log("using config path:"+config_path);
 config_path = path.resolve(config_path);
 
 if(!fs.existsSync(config_path)) {
@@ -26,12 +25,11 @@ if(!config.rundir) {
     var rundir = path.dirname(config_path);
     config.rundir = rundir;
 }
+
 //set user if it's not set
 if(!config.user) {
     config.user = process.getuid();
 }
-
-config.opissue_log = "opissue.log";
 
 //create pid
 fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
@@ -39,7 +37,9 @@ fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
 process.on('uncaughtException', function(err) {
     console.log('osg-blast: Caught exception: ' + err);
     console.trace(err);
-    fs.appendFile(config.opissue_log, "osg-blast: uncaughtException\n"+err);
+    if(config.oplog) {
+        fs.appendFile(config.oplog, "osg-blast: uncaughtException\n"+err);
+    }
 });
 
 var prev_status;
@@ -55,11 +55,6 @@ function status(status, message) {
 
 osgblast.run(config, status).then(function() {
     console.log("workflow completed successfully");
-    //process.exit(0);
-}).fail(function(err) {
-    console.log("workflow failed permanently");
-    console.log(err);
-    //process.exit(1);
 }).catch(function(err) {
     console.log("workflow threw exception:"+err);
 }).done();
