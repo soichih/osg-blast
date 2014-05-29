@@ -587,7 +587,7 @@ module.exports.run = function(config, status) {
 
         job.on('imagesize', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' imagesize update '+JSON.stringify(info));
-            oplog({info: info});
+            //oplog({info: info});
         });
 
         job.on('hold', function(info) {

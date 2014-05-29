@@ -134,17 +134,34 @@ case $blast_ret in
     echo "out of memory"
     exit 2
     ;;
+126)
+    echo "blast binary can't be executed"
+    exit $blast_ret
+    ;;
 127)
-    echo "no blastp"
-    exit 12
+    echo "no blast binary"
+    exit $blast_ret
+    ;;
+128)
+    #I don't know what this is 
+    echo "invalid argument to exit"
+    exit $blast_ret
+    ;;
+135)
+    echo "probably killed by SIGEMT (128+7).. probably terminated with a core dump."
+    exit $blast_ret
     ;;
 137)
     echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
-    exit 2
+    exit $blast_ret
     ;;
 139)
     echo "blast segfaulted"
-    exit 14
+    exit $blast_ret
+    ;;
+143)
+    echo "probably killed by SIGTERM(128+14).."
+    exit $blast_ret
     ;;
 255)
     echo "NCBI C++ Exception?"
@@ -152,7 +169,7 @@ case $blast_ret in
     ;;
 *)
     echo "unknown error code: $blast_ret"
-    exit 9
+    exit $blast_ret
     ;;
 esac
 
