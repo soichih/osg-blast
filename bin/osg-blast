@@ -36,7 +36,7 @@ fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
 
 process.on('uncaughtException', function(err) {
     console.log('osg-blast: Caught exception: ' + err);
-    console.trace(err);
+    //console.trace(err);
     if(config.oplog) {
         fs.appendFile(config.oplog, "osg-blast: uncaughtException\n"+err);
     }

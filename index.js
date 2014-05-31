@@ -105,11 +105,17 @@ module.exports.run = function(config, status) {
     function oplog(log) {
         if(config.oplog) {
             log.date =  new Date();
-            fs.appendFile(config.oplog, JSON.stringify(log, null, 4)+"\n",  function (err) {
-                if(err) {
-                    console.log("failed to output oplog:"+config.oplog+"\n"+err);
-                }
-            }); 
+            try {
+                var str = JSON.stringify(log, null, 4);
+                fs.appendFile(config.oplog, str+"\n",  function (err) {
+                    if(err) {
+                        console.log("failed to output oplog:"+config.oplog+"\n"+err);
+                    }
+                });
+            } catch (e) {
+                console.log("oplog: couldn't stringify. dumping to console");
+                console.dir(log);
+            }
         }
     }
 
@@ -213,7 +219,7 @@ module.exports.run = function(config, status) {
         workflow.test_resubmits = 10; //max number of time test job should be resubmitted
         workflow.test_job_num = 5; //number of jobs to submit for test
         workflow.test_job_block_size = 32; //number of query to test per job
-        workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
+        workflow.target_job_duration = 1000*60*60; //shoot for 60 minutes
 
         //testrun will reset this based on execution time of test jobs (and resource usage in the future)
         workflow.block_size = 2000; 
@@ -369,7 +375,7 @@ module.exports.run = function(config, status) {
 
         job.on('exception', function(info) {
             console.log(job.id+' test:'+part+' threw exception on '+job.resource_name+' :: '+info.Message);
-            oplog({job: job, part: part, info: info});
+            oplog({job: job, part: part, message: "exception: "+info.Message});
             /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' test:'+part+' exception on '+job.resource_name+' :: '+info.Message+"\n");
@@ -384,7 +390,7 @@ module.exports.run = function(config, status) {
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
                     stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
-                    oplog({job: job, part: part, msg: "test job held", info:info});
+                    oplog({job: job, part: part, msg: "test job held: " + info.msg, info: info.info});
                 });
             });
         });
@@ -644,7 +650,7 @@ module.exports.run = function(config, status) {
         });
         job.on('exception', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message);
-            oplog({job: job, block: block, dbpart: dbpart, info: info});
+            oplog({job: job, block: block, dbpart: dbpart, message: "exception: " + info.Message});
             /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message+"\n");
