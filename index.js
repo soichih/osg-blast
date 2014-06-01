@@ -606,7 +606,6 @@ module.exports.run = function(config, status) {
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
                             console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. JobRunCount: "+data.JobRunCount+" ... releasing");
-                            job.release();
                             break;
                         default: 
                             //console.log(typeof info.HoldReasonSubCode);
@@ -626,9 +625,10 @@ module.exports.run = function(config, status) {
                             console.dir(info);
 
                             oplog({job: job, data: data, info: info});
-
-                            job.release();
                         }
+
+                        //rerun
+                        job.release();
                     } else {
                         stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
                         oplog({job: job, msg: "ran too many times.. aborting workflow", data: data});
