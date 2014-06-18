@@ -35,7 +35,7 @@ if(!config.user) {
 fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
 
 process.on('uncaughtException', function(err) {
-    console.log('osg-blast: Caught exception: ' + err);
+    console.log('osg-blast: Caught exception: ' + err+"\n");
     //console.trace(err);
     if(config.oplog) {
         fs.appendFile(config.oplog, "osg-blast: uncaughtException\n"+err);
@@ -49,12 +49,25 @@ function status(status, message) {
     } 
     fs.writeFileSync(config.rundir+"/status.txt", status+"\n"+message+"\n");
     var d = new Date();
-    console.log(status + " :: " + d.toString() + " :: " + message);
+    console.log(status + " :: " + d.toString() + " :: " + message); //no newline?
     prev_status = status;
 }
 
 osgblast.run(config, status).then(function() {
-    console.log("workflow completed successfully");
+    console.log("workflow completed successfully\n");
+    process.exit(0);
 }).catch(function(err) {
-    console.log("workflow threw exception:"+err);
+    console.log("workflow threw exception:"+err+"\n");
+    process.exit(1);
 }).done();
+
+//remove all jobs on all workflows
+process.on('SIGINT', function(code) {
+    console.log("osg-blast received SIGINT(ctrl+c)");
+    process.exit(code);
+});
+process.on('SIGTERM', function(code) {
+    console.log("osg-blast received SIGTERM(kill)");
+    process.exit(code);
+});
+

@@ -61,13 +61,10 @@ function load_db_info(data) {
 }
 
 module.exports.run = function(config, status) {
-
-    //console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
-    //console.dir(config);
-
     //some default
     config = extend({
-        tmpdir: '/tmp'
+        tmpdir: '/tmp',
+        x509userproxy: '/local-scratch/iugalaxy/blastcert/osgblast.proxy'
     }, config); 
 
     /* config should look like
@@ -86,6 +83,7 @@ module.exports.run = function(config, status) {
         //needed to run jobs on osg-xsede
         "+ProjectName": config.project,
         "+PortalUser": config.user,
+
 
         //TODO - untested -- is this really a good idea?
         "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
@@ -128,18 +126,18 @@ module.exports.run = function(config, status) {
             condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
 
             console.log("processing oasis dbinfo");
-            //config._db_type = "oasis";
             //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
-            config._oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+
+            var oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+            config._oasis_dbpath = oasis_dbpath;
+
             config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
-            var pdir = config._oasis_dbpath+"/"+config._db_name;
-            status('TESTING', "loading dbinfo for oasisdb:"+pdir);
+            var pdir = oasis_dbpath+"/"+config._db_name;
+            status('TESTING', "loading dbinfo from oasisdb:"+pdir);
             if(fs.existsSync(pdir+".pal")) {
-                //config._db_type = "prot";
                 var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
                 config.dbinfo = load_db_info(data);
             } else if(fs.existsSync(pdir+".nal")) {
-                //config._db_type = "nucl";
                 var data = fs.readFileSync(pdir+".nal", {encoding: 'utf8'});
                 config.dbinfo = load_db_info(data);
             } else {
@@ -150,6 +148,34 @@ module.exports.run = function(config, status) {
                 };
             }
             status('TESTING', "oasis dbinfo loaded");
+            deferred.resolve(); 
+        } else if(dbtokens[0] == "irods") {
+            //we use irods binary stored in oasis.
+            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && "+condor.Requirements;
+            //we need to use osg-blast/osg-xsede.grid.iu.edu service cert
+            //condor.x509userproxy = "/local-scratch/iugalaxy/blastcert/osgblast.proxy"; // blastcert/proxy_init.sh
+            condor.x509userproxy = config.x509userproxy;
+
+            console.log("processing irods dbinfo");
+            config._irod_dbpath = "irodse://goc@irods.fnal.gov:1247?/osg/home/goc/"+dbtokens[1];
+
+            config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
+            var pdir = "/local-scratch/iugalaxy/blastdb/"+dbtokens[1]+"/"+config._db_name;
+            status('TESTING', "loading dbinfo from "+pdir);
+            if(fs.existsSync(pdir+".pal")) {
+                var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else if(fs.existsSync(pdir+".nal")) {
+                var data = fs.readFileSync(pdir+".nal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else {
+                //single part db 
+                config.dbinfo = {
+                    title: config._db_name, //TODO - pull real name from db?
+                    parts: [config._db_name]
+                };
+            }
+            status('TESTING', "irods dbinfo loaded");
             deferred.resolve(); 
         } else {
             status('TESTING', "processing user dbinfo");
@@ -307,6 +333,9 @@ module.exports.run = function(config, status) {
                             if(config._oasis_dbpath) {
                                 fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
                             }
+                            if(config._irod_dbpath) {
+                                fs.writeSync(fd, "export irod_dbpath="+config._irod_dbpath+"\n");
+                            }
                             if(config._user_dbpath) {
                                 fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
                             }
@@ -415,13 +444,9 @@ module.exports.run = function(config, status) {
         var now = new Date();
         if(info.ret == 0) {
             //start copying file to rundir
-            fs.createReadStream(job.rundir+'/output')
-                .pipe(fs.createWriteStream(config.rundir+'/output/output.'+name));
-
-            //TODO - what should I do with these information?
-            //console.log(job.id+" max_image_size:"+job.max_image_size+" max_memory_size:"+job.max_memory_usage+" max_resident_set_size:"+job.max_resident_set_size);
-
+            fs.createReadStream(job.rundir+'/output').pipe(fs.createWriteStream(config.rundir+'/output/output.'+name));
             success(job, info);
+/*
         } else if(info.ret > 0 && info.ret < 10) {
             console.log("----------------------------------permanent error---------------------------------");
             fs.readFile(job.stdout, 'utf8', function (err,data) {
@@ -437,17 +462,16 @@ module.exports.run = function(config, status) {
                     //oplog({job: job, msg: "job failed permanently", info:info});
                 }); 
             }); 
+*/
         } else {
+            //let's always resubmit .. until retry count reaches
             if(info.ret == 15) {
                 oplog({msg : "squid server mulfunctioning at site: "+job.resource_name});
-                /*
-                if(config.opissue_log) {
-                    fs.appendFile(config.opissue_log, "squid server mulfunctioning on site:"+job.resource_name+"\n");
-                }
-                */
             }
+
             status(null, job.id+' '+name+' temporarily failed (code '+info.ret+').. resubmitting');
             resubmit(job);
+
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");
                 console.log(data);
@@ -495,8 +519,6 @@ module.exports.run = function(config, status) {
     }
 
     function submitjob(block, dbpart, submitted, success, resubmit, stopwf) {
-        //console.log("submitting job block:"+block+" dbpart:"+dbpart);
-
         var _rundir = null; //_rundir for this particualar job (not config.rundir)
         var starttime;
 
@@ -548,6 +570,9 @@ module.exports.run = function(config, status) {
                             if(config._oasis_dbpath) {
                                 fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
                             }
+                            if(config._irod_dbpath) {
+                                fs.writeSync(fd, "export irod_dbpath="+config._irod_dbpath+"\n");
+                            }
                             if(config._user_dbpath) {
                                 fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
                             }
@@ -575,6 +600,11 @@ module.exports.run = function(config, status) {
 
             console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart+" rundir:"+job.rundir);
             submitted(null); //null for err
+
+            if(workflow.removed) {
+                console.log("workflow already removed .. removing job");
+                job.remove();
+            }
         });
         job.on('submitfail', function(err) {
             console.log("failed to submit job :: "+err);
@@ -597,8 +627,6 @@ module.exports.run = function(config, status) {
         });
 
         job.on('hold', function(info) {
-            //console.log(job.id + 'held');
-            //console.dir(info);
             oplog({job: job, msg: "hold event", info: info});
 
             var now = new Date();
@@ -634,6 +662,11 @@ module.exports.run = function(config, status) {
                         }
 
                         //rerun
+                        var stat = workflow.get_runtime_stats(job.resource_name);
+                        if(stat.hold.length > 10) {
+                            oplog({msg: job.resource_name + " had too many holds.. blacklisting this site for this workflow"});
+                            condor.Requirements = "(GLIDEIN_ResourceName =!= \""+job.resource_name+"\") && "+condor.Requirements;
+                        }
                         job.release();
                     } else {
                         stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
