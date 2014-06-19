@@ -14,8 +14,9 @@ while True:
         break
 
     #need to call this as separate process - so that libxml2 will let go of the virtual memory
+    #TODO - pipe stderr to this process's stderr..
     try:
-        ret = subprocess.call(["osg-blast-merge5.block.py", str(block)])
+        ret = subprocess.call(["osg-blast-merge5.block.py", str(block)], stderr=subprocess.STDOUT)
         if ret < 0:
             print "osg-blast-merge5.block.py killed by signal", -ret
         elif ret > 0:

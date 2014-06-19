@@ -21,6 +21,7 @@ max_target_seqs=500
 
 #blockname=sys.argv[1]
 def merge(blockname):
+    print "merging query block",blockname
     template_doc = None
 
     #group all iterations on query definition
@@ -31,33 +32,39 @@ def merge(blockname):
         if not os.path.exists(path):
             break 
 
-        #xml_file = gzip.open(path, "r")
-        xml_file = open(path, "r")
+        #parse
+        try:
+            xml_file = open(path, "r")
+            xml = xml_file.read() 
+            doc = libxml2.parseDoc(xml)
 
-        xml = xml_file.read() 
-        doc = libxml2.parseDoc(xml)
+            #use first doc as template
+            if template_doc == None:
+                template_doc = doc
+
+            ctxt = doc.xpathNewContext()
+
+            #pull queries
+            iterations = ctxt.xpathEval("//Iteration")
+            for iteration in iterations:
+                query_id = iteration.xpathEval("Iteration_query-ID")[0].content
+                #query_def = iteration.xpathEval("Iteration_query-def")[0].content
+                if not query_id in queries.keys():
+                    queries[query_id] = [iteration]
+                else:
+                    queries[query_id].append(iteration)
+
+            usage = resource.getrusage(resource.RUSAGE_SELF)
+
+            #this doesn't seem to help.. but
+            ctxt.xpathFreeContext()
+        except:
+            print >> sys.stderr, "failed to parse",path,"skipping"
+
         xml_file.close()
 
-        #use first doc as template
-        if template_doc == None:
-            template_doc = doc
-
-        ctxt = doc.xpathNewContext()
-
-        iterations = ctxt.xpathEval("//Iteration")
-        for iteration in iterations:
-            query_id = iteration.xpathEval("Iteration_query-ID")[0].content
-            #query_def = iteration.xpathEval("Iteration_query-def")[0].content
-            if not query_id in queries.keys():
-                queries[query_id] = [iteration]
-            else:
-                queries[query_id].append(iteration)
-
-        usage = resource.getrusage(resource.RUSAGE_SELF)
         part+=1
 
-        #this doesn't seem to help.. but
-        ctxt.xpathFreeContext()
 
     if template_doc == None:
         print "no result for ",blockname
@@ -65,10 +72,7 @@ def merge(blockname):
 
     def getevalue(hit):
         first_hit = hit.xpathEval("Hit_hsps/Hsp")[0]
-        #print dir(first_hit)
-        #sys.exit()
         evalue = first_hit.xpathEval("Hsp_evalue")[0].content
-        #print evalue
 
         return float(evalue)
 
@@ -76,8 +80,7 @@ def merge(blockname):
     allhits_sorted = {}
     for query_id in queries.keys():
         iterations = queries[query_id] 
-        print query_id
-        print "merging",len(iterations),"iterations"
+        #print query_id,"merging",len(iterations),"iterations"
         allhits = []
         for iteration in iterations:
             hits = iteration.xpathEval("Iteration_hits/Hit")
@@ -92,9 +95,10 @@ def merge(blockname):
     iterations = ctxt.xpathEval("//Iteration")
 
     #insert hits back (upto -max-target_seqs)
+    print "adding hits"
     for iteration in iterations:
         query_id = iteration.xpathEval("Iteration_query-ID")[0].content
-        print "adding hits for",query_id
+        #print "adding hits for",query_id
 
         #empty hits under iteration_hits
         hitsnode = iteration.xpathEval("Iteration_hits")[0]
@@ -109,9 +113,7 @@ def merge(blockname):
             hitnode = hit.xpathEval("Hit_num")[0]
             hitnode.setContent(str(hitnum))
 
-            #print "\tbefore addig hit",hitnum,"\ttotal now:",len(hitsnode.xpathEval("Hit"))
             hitsnode.addChild(hit.copyNode(1))
-            #print "\tadded - total now:",len(hitsnode.xpathEval("Hit"))
 
             hitnum+=1
             #simulate default -max_target_seqs (=500) so that we don't get too many hits
@@ -120,7 +122,7 @@ def merge(blockname):
 
     #output 
     outpath = "merged.qb_"+str(blockname)
-    print outpath
+    #print outpath
     f = open(outpath, "w")
     template_doc.saveTo(f)
 
