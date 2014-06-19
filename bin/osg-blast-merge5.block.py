@@ -126,8 +126,8 @@ def merge(blockname):
 
     #these doesn't help at all
     template_doc.freeDoc()
-    doc.freeDoc()
     ctxt.xpathFreeContext()
+    #doc.freeDoc() #this causes segfault
 
     f.close()
 
