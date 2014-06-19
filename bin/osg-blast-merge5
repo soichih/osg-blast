@@ -17,9 +17,9 @@ while True:
     try:
         ret = subprocess.call(["osg-blast-merge5.block.py", str(block)])
         if ret < 0:
-            print "osg-blast-merge5.block.py killed by signal", -retcode
+            print "osg-blast-merge5.block.py killed by signal", -ret
         elif ret > 0:
-            print "osg-blast-merge5.block.py returned ", retcode
+            print "osg-blast-merge5.block.py returned ", ret
             sys.exit(1)
     except OSError, e:
         print "osg-blast-merge5.block.py execution failed:", e
