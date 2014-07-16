@@ -176,6 +176,7 @@ module.exports.run = function(config, status) {
                 };
             }
             status('TESTING', "irods dbinfo loaded");
+            console.dir(config.dbinfo);
             deferred.resolve(); 
         } else {
             status('TESTING', "processing user dbinfo");

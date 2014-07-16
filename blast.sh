@@ -62,7 +62,7 @@ elif [ $irod_dbpath ]; then
     date +%c
     echo "copying $dbname.tar.gz from $irod_dbpath"
     /cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz
-    $ret=$?
+    ret=$?
     if [ $ret -ne 0 ]
     then
         echo "failed to download blast db part via irods (retcode:$ret)"
