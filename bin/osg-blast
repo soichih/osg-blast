@@ -55,7 +55,8 @@ function status(status, message) {
 
 osgblast.run(config, status).then(function() {
     console.log("workflow completed successfully\n");
-    process.exit(0);
+    //don't kill - other wise some output file might not be written to output directory
+    //process.exit(0);
 }).catch(function(err) {
     console.log("workflow threw exception:"+err+"\n");
     process.exit(1);

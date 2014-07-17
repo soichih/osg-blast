@@ -5,13 +5,12 @@ echo "hostname" `hostname`
 echo "OSG env"
 set | grep OSG
 
-echo "sourcing params";
+echo "sourcing params.sh";
 cat params.sh
+source ./params.sh
 
 echo "prevent condor to issue hold event before terminating with any error code"
 touch output
-
-source ./params.sh
 
 #export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
 #export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin

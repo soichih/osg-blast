@@ -154,7 +154,7 @@ module.exports.run = function(config, status) {
             condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && "+condor.Requirements;
             //we need to use osg-blast/osg-xsede.grid.iu.edu service cert
             //condor.x509userproxy = "/local-scratch/iugalaxy/blastcert/osgblast.proxy"; // blastcert/proxy_init.sh
-            condor.x509userproxy = config.x509userproxy;
+            condor.x509userproxy = path.resolve(config.x509userproxy);
 
             console.log("processing irods dbinfo");
             config._irod_dbpath = "irodse://goc@irods.fnal.gov:1247?/osg/home/goc/"+dbtokens[1];
