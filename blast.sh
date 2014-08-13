@@ -18,15 +18,16 @@ touch output
 #limit memory at 2G
 ulimit -v 2048000
 
-#blast app and irod binary comes from oasis. we need oasis
-if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
-    env | sort
-    echo "can't access /cvmfs/oasis.opensciencegrid.org"
-    exit 68
-fi
 
 if [ $oasis_dbpath ]; then
     echo "using oasis db"
+
+    #blast app and irod binary comes from oasis. we need oasis
+    if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
+        env | sort
+        echo "can't access /cvmfs/oasis.opensciencegrid.org"
+        exit 68
+    fi
 
     #echo "listing oasis projects avaialble"
     #ls -lart /cvmfs/oasis.opensciencegrid.org
@@ -56,6 +57,13 @@ if [ $oasis_dbpath ]; then
 elif [ $irod_dbpath ]; then
     echo "using irod db"
 
+    #blast app and irod binary comes from oasis. we need oasis
+    if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
+        env | sort
+        echo "can't access /cvmfs/oasis.opensciencegrid.org"
+        exit 68
+    fi
+
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
     mkdir blastdb
     date +%c
@@ -77,6 +85,7 @@ elif [ $irod_dbpath ]; then
         fi
     fi 
 else
+    #user db doesn't use OASIS!
     echo "downloading user db from $user_dbpath - through squid";
 
     #need to deal with squid server.. https://twiki.grid.iu.edu/bin/view/Documentation/OsgHttpBasics
