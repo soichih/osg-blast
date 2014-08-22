@@ -60,6 +60,34 @@ function load_db_info(data) {
     };
 }
 
+var workflow_registry = {
+    workflows: [], //list of all workflows
+    remove: function(workflow) {
+        workflow.remove();
+        var i = this.workflows.indexOf(workflow);
+        if(~i) {
+            console.log("removing workflow "+i);
+            this.workflows.splice(i, 1);
+        }
+    },
+    create: function() {
+        var workflow = new osg.Workflow();
+        this.workflows.push(workflow);
+        return workflow;
+    },
+    removeall: function() {
+        this.workflows.forEach(function(workflow) {
+            console.log("removing workflow "+workflow.id);
+            workflow.remove();
+        });
+        this.workflows = []; //empty it
+    }
+};
+
+module.exports.stop = function() {
+    workflow_registry.removeall();
+};
+
 module.exports.run = function(config, status) {
     //some default
     config = extend({
@@ -97,7 +125,7 @@ module.exports.run = function(config, status) {
                         "(Disk >= 10*1024*1024)" //10G should be more than enough enough
     }
 
-    var workflow = new osg.Workflow();
+    var workflow = workflow_registry.create();
 
     //output operational log (if config.oplog is set)
     function oplog(log) {
@@ -426,12 +454,14 @@ module.exports.run = function(config, status) {
         });
 
         job.on('evict', function(info) {
-            console.log('job evicted');
+            //I am not sure if I've ever seen this happen
+            console.log(job.id+' test:'+part+' evicted while running on '+job.resource_name);
             console.dir(info);
+            //TODO - I believe evict events are followed by abort/terminate type event.. so I don't have to do anythig here?
         });
 
         job.on('abort', function(info) {
-            stopwf('ABORTED', 'test aborted');
+            stopwf('ABORTED', 'test job aborted');
         });
 
         job.on('terminate', function(info) {
@@ -636,7 +666,7 @@ module.exports.run = function(config, status) {
                     stopwf('FAILED', job.id+' qb:'+block+' db:'+dbpart+" held but couldn't run condor_q .. aborting workflow :"+err);
                     oplog({job: job, msg: "condor_q failed", err: err});
                 } else {
-                    console.dir(data);
+                    //console.dir(data);
                     if(data.JobRunCount < 3) {
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
@@ -664,7 +694,12 @@ module.exports.run = function(config, status) {
 
                         //rerun
                         var stat = workflow.get_runtime_stats(job.resource_name);
-                        if(stat.hold.length > 10) {
+
+                        //debug
+                        console.log("dumping runtime stat for "+job.resource_name);
+                        console.dir(stat);
+
+                        if(stat && stat.hold.length > 10) {
                             oplog({msg: job.resource_name + " had too many holds.. blacklisting this site for this workflow"});
                             condor.Requirements = "(GLIDEIN_ResourceName =!= \""+job.resource_name+"\") && "+condor.Requirements;
                         }
@@ -691,8 +726,18 @@ module.exports.run = function(config, status) {
             }
             */
         });
+        job.on('evict', function(info) {
+            //I am not sure if I've ever seen this happen
+            console.log(job.id+' qb:'+block+' db:'+dbpart+' evicted on '+job.resource_name);
+            console.dir(info);//debug
+            //TODO - I believe evict events are followed by abort/terminate type event.. so I don't have to do anythig here?
+        });
+
         job.on('abort', function(info) {
-            stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
+            //stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
+            console.log(job.id+' qb:'+block+' db:'+dbpart+' aborted while running on '+job.resource_name+' -- releasing..:: '+info.Message);
+            console.dir(info); //debug
+            job.release(); //TODO - can I release an aborted job?
         });
 
         job.on('terminate', function(info) {
@@ -741,7 +786,7 @@ module.exports.run = function(config, status) {
 
         function success(job, info) {
             results.push(info); 
-            status('TESTING', job.id+' test job successfully completed in '+info.walltime+'(msec) :: finished:'+results.length+'/'+fasta_blocks.length);
+            status('TESTING', job.id+' test job successfully completed in '+info.walltime+'ms :: finished:'+results.length+'/'+fasta_blocks.length);
 
             //all test completed?
             if(results.length == fasta_blocks.length) {
@@ -750,7 +795,7 @@ module.exports.run = function(config, status) {
         }
 
         function analyze_results() {
-            console.log("test jobs walltimes(msec)");
+            console.log("test jobs walltimes(ms)");
             console.dir(results);
 
             //calculate average time it took to run
@@ -758,7 +803,7 @@ module.exports.run = function(config, status) {
             console.log("sum:"+sum);
             console.log("size:"+results.length);
             var average = sum / results.length; 
-            console.log("average job walltime(msec):"+average);
+            console.log("average job walltime(ms):"+average);
 
             //compute standard deviation
             var sumd = results.reduce(function(d, result) {
@@ -810,7 +855,7 @@ module.exports.run = function(config, status) {
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.remove();
+            workflow_registry.remove(workflow);
             deferred.reject(st+" :: " + err);
         }
 
@@ -855,7 +900,7 @@ module.exports.run = function(config, status) {
         console.log("number of blocks:"+blocks+" number of db parts:"+config.dbinfo.parts.length);
         function success(job, info) {
             jobdone++;
-            status('RUNNING', job.id+' successfully completed in '+info.walltime+'(msec) :: finished:'+jobdone+'/'+jobnum);
+            status('RUNNING', job.id+' successfully completed in '+info.walltime+'ms :: finished:'+jobdone+'/'+jobnum);
 
             //job completed?
             if(jobdone == jobnum) {
@@ -892,7 +937,7 @@ module.exports.run = function(config, status) {
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.remove();
+            workflow_registry.remove(workflow);
             deferred.reject(st+" :: " + err);
         }
 

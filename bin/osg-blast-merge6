@@ -13,4 +13,8 @@ do
 done
 
 echo "merging query blocks"
-sort merged.qb_* > merged
+#sort merged.qb_* > merged
+cat merged.qb_* > merged
+
+echo "removing temp files"
+rm merged.qb_*
