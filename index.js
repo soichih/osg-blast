@@ -117,6 +117,7 @@ module.exports.run = function(config, status) {
         "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
 
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
+                        "(GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") && "+      //code 3-ed left and right for irods
                         //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       

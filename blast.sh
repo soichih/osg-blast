@@ -68,7 +68,11 @@ elif [ $irod_dbpath ]; then
     mkdir blastdb
     date +%c
     echo "copying $dbname.tar.gz from $irod_dbpath"
-    /cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz
+    
+    #/cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz
+    #new version of icp-osg that does retries
+    /cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/v0.8/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz 
+
     ret=$?
     if [ $ret -ne 0 ]
     then
@@ -94,11 +98,12 @@ else
         echo "using squid:" $OSG_SQUID_LOCATION
         export http_proxy=$OSG_SQUID_LOCATION
 
-        #test squid access (and throughput... TODO - I need to use reliable, but large enough test data)
-        wget -q --timeout=2 http://google.com
+        #test squid access (per goc ticket 22099, switching to use cern.ch)
+        wget -q --timeout=2 http://cern.ch
         if [ $? -ne 0 ]; then
-            echo "wget failed through squid.."
-            exit 15
+            echo "wget failed through squid.. $OSG_SQUID_LOCATION.. trying without squid"
+            #exit 15
+            unset http_proxy
         fi
     else
         echo "OSG_SQUID_LOCATION is not set... not using squid"
