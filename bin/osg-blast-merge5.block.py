@@ -1,11 +1,20 @@
 #!/usr/bin/python
 
+import logging
 import libxml2
 import sys
 import os
 import glob
 import resource
-#import gzip
+
+#setup logging
+logger = logging.getLogger('osg-blast-merge5(xml).block')
+logger.setLevel(logging.DEBUG)
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 #default is 500 in blast - need to match with blast.opt(in setup.py and setup_userdb.py)
 #increasing max_target_seqs increases virtual memory usage and causes batch manager to SIGKILL.
@@ -21,7 +30,7 @@ max_target_seqs=500
 
 #blockname=sys.argv[1]
 def merge(blockname):
-    print "merging query block",blockname
+    logger.info("merging query block "+blockname)
     template_doc = None
 
     #group all iterations on query definition
@@ -59,7 +68,7 @@ def merge(blockname):
             #this doesn't seem to help.. but
             ctxt.xpathFreeContext()
         except:
-            print >> sys.stderr, "failed to parse",path,"skipping"
+            logger.error("failed to parse:"+path+" -- skipping")
 
         xml_file.close()
 
@@ -67,7 +76,7 @@ def merge(blockname):
 
 
     if template_doc == None:
-        print "no result for ",blockname
+        logger.error("no result for "+blockname)
         sys.exit(1)
 
     def getevalue(hit):
@@ -80,7 +89,6 @@ def merge(blockname):
     allhits_sorted = {}
     for query_id in queries.keys():
         iterations = queries[query_id] 
-        #print query_id,"merging",len(iterations),"iterations"
         allhits = []
         for iteration in iterations:
             hits = iteration.xpathEval("Iteration_hits/Hit")
@@ -95,10 +103,9 @@ def merge(blockname):
     iterations = ctxt.xpathEval("//Iteration")
 
     #insert hits back (upto -max-target_seqs)
-    print "adding hits"
+    logger.info("adding hits")
     for iteration in iterations:
         query_id = iteration.xpathEval("Iteration_query-ID")[0].content
-        #print "adding hits for",query_id
 
         #empty hits under iteration_hits
         hitsnode = iteration.xpathEval("Iteration_hits")[0]
