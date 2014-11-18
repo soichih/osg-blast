@@ -122,8 +122,11 @@ module.exports.run = function(config, status) {
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
-                        "(Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
-                        "(Disk >= 10*1024*1024)" //10G should be more than enough enough
+                
+                        //This gets set automatically
+                        //"(TARGET.Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
+
+                        "(TARGET.Disk >= 10*1024*1024)" //10G should be more than enough enough
     }
 
     var workflow = workflow_registry.create();
@@ -152,7 +155,8 @@ module.exports.run = function(config, status) {
         var dbtokens = config.db.split(":");
         if(dbtokens[0] == "oasis") {
             //add oasis requirements for condor Requirements
-            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
+            //condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
+            condor.Requirements = "(TARGET.CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
 
             console.log("processing oasis dbinfo");
             //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
@@ -326,6 +330,8 @@ module.exports.run = function(config, status) {
             executable: __dirname+'/blast.sh',
             receive: ['output'],
             timeout: 40*60*1000, 
+            timeout_reason: "test job timeout in 40 minutes", 
+
             description: 'test blast job on dbpart:'+part+' with queries:'+fastas.length,
             condor: condor,
 
@@ -559,6 +565,7 @@ module.exports.run = function(config, status) {
             receive: ['output'],
             //arguments: [],
             timeout: 3*60*60*1000, //kill job in 3 hours (job should finish in 1.5 hours)
+            timeout_reason: "each job should not run more than 3 hours",
 
             //timeout: 60*1000, //debug.. 1 minutes
 

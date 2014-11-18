@@ -1,8 +1,8 @@
 {
   "name": "osg-blast",
-  "version": "2.0.28",
+  "version": "2.0.29",
   "description": "blast workflow for open science grid",
-  "main": "index.js",
+  "main": "app.js",
   "bin": {
     "osg-blast": "./bin/osg-blast",
     "osg-blast-merge5": "./bin/osg-blast-merge5",
