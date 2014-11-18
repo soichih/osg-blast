@@ -706,8 +706,7 @@ module.exports.run = function(config, status) {
                         //debug
                         console.log("dumping runtime stat for "+job.resource_name);
                         console.dir(stat);
-
-                        if(stat && stat.hold.length > 10) {
+                        if(stat && stat.holds && stat.holds.length > 10) {
                             oplog({msg: job.resource_name + " had too many holds.. blacklisting this site for this workflow"});
                             condor.Requirements = "(GLIDEIN_ResourceName =!= \""+job.resource_name+"\") && "+condor.Requirements;
                         }
