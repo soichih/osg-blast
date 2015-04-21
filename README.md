@@ -5,13 +5,15 @@ ncbi-blast workflow submission script
 osg-blast submits a workflow to run blast search on a large input queries against a large blast database. 
 osg-blast is intended to run on Open Science Grid, and on a glidein enabled submit host (such as osg-xsede or OSGconnect).
 
-# Install blast from ncbi
+# Installing blast from ncbi
 
 First you need to download the latest blast executable from
 ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/LATEST/ncbi-blast-2.2.30+-x64-linux.tar.gz
 Be sure to add /bin directory to your PATH
 
-# Install osg-blast
+# Installing osg-blast
+
+osg-blast (this repo!) allows you to run blast jobs on DHTC environment.
 
 If you don't have npm installed, please install it via yum.
 
@@ -33,7 +35,7 @@ If you install osg-blast on your home directory, add a path to osg-blast on your
 
 > export PATH=$PATH:~/node_modules/osg-blast/bin
 
-# Update osg-blast
+# Updating osg-blast
 
 To update osg-blast installation..
 
@@ -183,34 +185,20 @@ Anyone can use these databases. GOC periodically updates the content of the DB f
 OSG Operations group normally update the OASIS DB. Here is the instruction on how to update the OASIS DB for operations staff.
 
 1. Become an OSG VO OASIS Manager (https://oim.grid.iu.edu/oim/vo?id=30)
-
 2. gsissh to oasis-login as OSG user.
-
 > voms-proxy-init -voms osg
 > gsissh ouser.osg@oasis-login.grid.iu.edu
-
 3. Navigate to IU-GALAXY/blastdb directory
-
 > cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
-
 4. Run download script.
-
 > ./download_all.sh
-
 This will start downloading various blast DB from various places under directory named after today's date. The entire download process may take up to an hour.
-
 5. Validate & update dblist.json
-
 Make sure all download was successful (blast DB contained in each new directories), and update dblist.json (edit it via vim / emacs, etc..) - normally just update the dates on each DB types.
-
 6. Publish oasis
-
 > osg-oasis-update
-
 Update process make take a while, and it will take another day or so until most OSG sites will have the updated OASIS content.
-
 7. Submit test job
-
 Once the new content propagates to most OSG sites, submit a test blast job using the new DB.
 
 # Updating Blast DB on irods
