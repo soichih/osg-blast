@@ -22,7 +22,7 @@ sudo yum install npm
 If you don't have sudo access, you can download & install nodejs on your home directory from http://nodejs.org/. Make sure to add path to nodejs's bin directory if you install locally.
 
 
-1. Install osg-blast on your home directory
+Install osg-blast on your home directory
 
 ```
 cd ~
@@ -35,7 +35,7 @@ Add -g if you want to install it under /usr/bin (you need sudo access)
 npm install osg-blast -g
 ```
 
-3. If you install osg-blast on your home directory, add a path to osg-blast on your ~/.bashrc
+If you install osg-blast on your home directory, add a path to osg-blast on your ~/.bashrc
 
 ```
 export PATH=$PATH:~/node_modules/osg-blast/bin
@@ -53,7 +53,7 @@ npm update osg-blast
 
 # Running osg-blast
 
-## Step 1. Place some fasta input query inside an empty directory.
+Step 1. Place some fasta input query inside an empty directory.
 
 Or you can use following example.. (input.fasta)
 
@@ -76,7 +76,7 @@ TGCCACGGGCTTGGGCGGCACTTTCCGAAGAACT
 
 ```
 
-## Step 2. Create config.json containing something like following (in the same director where you put input.fasta)
+Step 2. Create config.json containing something like following (in the same director where you put input.fasta)
 
 ```
 {
@@ -93,7 +93,7 @@ You need to use the project name that you have access on your submit host. "user
 
 * You need to update the project that you have access on your submit host! (IU-GALAXY for an example..)
 
-## Step 3. Run osg-blast 
+Step 3. Run osg-blast 
 
 Run osg-blast command on the directory where you have config.json
 
@@ -144,7 +144,7 @@ workflow completed successfully
 
 ```
 
-## Step 4. Merge output
+Step 4. Merge output
 
 osg-blast will generate output files for each jobs under ./output directory. You can use osg-blast's merge script to merge all of your output into a single output file.
 
@@ -184,7 +184,8 @@ osg-blast uses some hosted DB (such as those DB published by NCBI) so you don't 
 your job. osg-blast will use ones published via OSG's OASIS.
 
 If you want to provide your own database, you can do so, but you need to make it available via some webserver where
-each job can download from (through squid).
+each job can download from (through squid). Most submit host (xd-login, osg-connect, etc... ) provides you some mechanism to 
+publish your input database for you. Please contact your submit host administrator.
 
 # Hosted Databases
 
@@ -197,22 +198,22 @@ Anyone can use these databases. GOC periodically updates the content of the DB f
 
 OSG Operations group normally update the OASIS DB. Here is the instruction on how to update the OASIS DB for operations staff.
 
-1. Become an OSG VO OASIS Manager (https://oim.grid.iu.edu/oim/vo?id=30)
+. Become an OSG VO OASIS Manager (https://oim.grid.iu.edu/oim/vo?id=30)
 
-2. gsissh to oasis-login as OSG user.
+. gsissh to oasis-login as OSG user.
 
 ```
 voms-proxy-init -voms osg
 gsissh ouser.osg@oasis-login.grid.iu.edu
 ```
 
-3. Navigate to IU-GALAXY/blastdb directory
+. Navigate to IU-GALAXY/blastdb directory
 
 ```
 cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
 ```
 
-4. Run download script.
+. Run download script.
 
 ```
 ./download_all.sh
@@ -220,11 +221,11 @@ cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
 
 This will start downloading various blast DB from various places under directory named after today's date. The entire download process may take up to an hour.
 
-5. Validate & update dblist.json
+. Validate & update dblist.json
 
 Make sure all download was successful (blast DB contained in each new directories), and update dblist.json (edit it via vim / emacs, etc..) - normally just update the dates on each DB types.
 
-6. Publish oasis
+. Publish oasis
 
 ```
 osg-oasis-update
@@ -232,7 +233,7 @@ osg-oasis-update
 
 Update process make take a while, and it will take another day or so until most OSG sites will have the updated OASIS content.
 
-7. Submit test job
+. Submit test job
 
 Once the new content propagates to most OSG sites, submit a test blast job using the new DB.
 
