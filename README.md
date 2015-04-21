@@ -37,7 +37,7 @@ npm install osg-blast -g
 
 3. If you install osg-blast on your home directory, add a path to osg-blast on your ~/.bashrc
 
-``
+```
 export PATH=$PATH:~/node_modules/osg-blast/bin
 ```
 
@@ -235,5 +235,10 @@ Update process make take a while, and it will take another day or so until most 
 7. Submit test job
 
 Once the new content propagates to most OSG sites, submit a test blast job using the new DB.
+
+# Updating Blast DB on irods
+
+osg-blast can run on irods hosted DB as well as OASIS. Use of irods is experimental, so please contact hayashis@iu.edu if you need the irods DB updated.
+
 
 
