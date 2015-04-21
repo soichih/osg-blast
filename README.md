@@ -7,8 +7,27 @@ osg-blast is intended to run on Open Science Grid, and via glidein enabled submi
 
 # Installation
 
+1. Make sure you have npm installed.
+
+2. Install osg-blast
+
 ```
+cd ~
 npm install osg-blast
+```
+
+Add -g if you want to install under /usr/bin (you need sudo access)
+
+3. Add path to osg-blast on your ~/.bashrc
+
+export PATH=$PATH:~/node_modules/osg-blast/bin
+
+# Update osg-blast
+
+```
+cd ~
+npm update osg-blast
+
 ```
 
 # Usage
@@ -40,7 +59,7 @@ Step 2. Create config.json containing something like following
 
 ```
 {
-    "project": "CSIU",
+    "project": "IU-GALAXY",
     "user": "hayashis",
 
     "input": "input.fasta",
@@ -51,18 +70,27 @@ Step 2. Create config.json containing something like following
 
 ```
 
-You need to specify the project that you have access on your submit host.
+* You need to specify the project that you have access on your submit host! (IU-GALAXY for an example..)
 
-Step 3. Run osg-blast
+Step 3. Run osg-blast 
+
+Run osg-blast - which uses your config.json on your current directory.
 
 ```
-osg-blast config.json
+osg-blast
+
 ```
 
-osg-blast will start running some tests, then submits jobs (there could be many thousands, depending on the size of your
-database, and input query, and your input parameters).
+If you expect your jobs to run days, make sure to nohup it
 
-To abort your job, simply hit CTRL+C (or do kill $pid). 
+```
+nohup osg-blast &
+tail -f nohup.out
+```
+
+osg-blast will start running some tests, then submits jobs (there could be many thousands, depending on the size of your database, and input query, and your input parameters).
+
+To abort your job, simply hit CTRL+C (or do kill osg-blast process which will terminate all jobs submitted)
 
 Step 4. Merge output
 
