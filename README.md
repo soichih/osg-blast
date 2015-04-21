@@ -15,9 +15,7 @@ Be sure to add /bin directory to your PATH
 
 If you don't have npm installed, please install it via yum.
 
-```
-sudo yum install npm
-```
+> sudo yum install npm
 
 If you don't have sudo access, you can download & install nodejs on your home directory from http://nodejs.org/. Make sure to add path to nodejs's bin directory if you install locally.
 
@@ -31,15 +29,11 @@ npm install osg-blast
 
 Add -g if you want to install it under /usr/bin (you need sudo access)
 
-```
-npm install osg-blast -g
-```
+> npm install osg-blast -g
 
 If you install osg-blast on your home directory, add a path to osg-blast on your ~/.bashrc
 
-```
-export PATH=$PATH:~/node_modules/osg-blast/bin
-```
+> export PATH=$PATH:~/node_modules/osg-blast/bin
 
 # Update osg-blast
 
@@ -97,10 +91,7 @@ Step 3. Run osg-blast
 
 Run osg-blast command on the directory where you have config.json
 
-```
-osg-blast
-
-```
+> osg-blast
 
 If you want your job to run after you log off from terminal, make sure to use nohup command.
 
@@ -198,34 +189,32 @@ Anyone can use these databases. GOC periodically updates the content of the DB f
 
 OSG Operations group normally update the OASIS DB. Here is the instruction on how to update the OASIS DB for operations staff.
 
-. Become an OSG VO OASIS Manager (https://oim.grid.iu.edu/oim/vo?id=30)
+1. Become an OSG VO OASIS Manager (https://oim.grid.iu.edu/oim/vo?id=30)
 
-. gsissh to oasis-login as OSG user.
+2. gsissh to oasis-login as OSG user.
 
 ```
 voms-proxy-init -voms osg
 gsissh ouser.osg@oasis-login.grid.iu.edu
 ```
 
-. Navigate to IU-GALAXY/blastdb directory
+3. Navigate to IU-GALAXY/blastdb directory
 
 ```
 cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
 ```
 
-. Run download script.
+4. Run download script.
 
-```
-./download_all.sh
-```
+> ./download_all.sh
 
 This will start downloading various blast DB from various places under directory named after today's date. The entire download process may take up to an hour.
 
-. Validate & update dblist.json
+5. Validate & update dblist.json
 
 Make sure all download was successful (blast DB contained in each new directories), and update dblist.json (edit it via vim / emacs, etc..) - normally just update the dates on each DB types.
 
-. Publish oasis
+6. Publish oasis
 
 ```
 osg-oasis-update
@@ -233,7 +222,7 @@ osg-oasis-update
 
 Update process make take a while, and it will take another day or so until most OSG sites will have the updated OASIS content.
 
-. Submit test job
+7. Submit test job
 
 Once the new content propagates to most OSG sites, submit a test blast job using the new DB.
 
