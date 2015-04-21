@@ -22,10 +22,8 @@ If you don't have sudo access, you can download & install nodejs on your home di
 
 Install osg-blast on your home directory
 
-```
-cd ~
-npm install osg-blast
-```
+> cd ~
+> npm install osg-blast
 
 Add -g if you want to install it under /usr/bin (you need sudo access)
 
@@ -39,11 +37,8 @@ If you install osg-blast on your home directory, add a path to osg-blast on your
 
 To update osg-blast installation..
 
-```
-cd ~
-npm update osg-blast
-
-```
+> cd ~
+> npm update osg-blast
 
 # Running osg-blast
 
@@ -95,10 +90,8 @@ Run osg-blast command on the directory where you have config.json
 
 If you want your job to run after you log off from terminal, make sure to use nohup command.
 
-```
-nohup osg-blast > stdout.txt 2> stderr.txt &
-tail -f stdout.txt stderr.txt
-```
+> nohup osg-blast > stdout.txt 2> stderr.txt &
+> tail -f stdout.txt stderr.txt
 
 To abort your job, simply hit CTRL+C (or kill osg-blast process which will terminate all jobs submitted)
 
@@ -193,16 +186,12 @@ OSG Operations group normally update the OASIS DB. Here is the instruction on ho
 
 2. gsissh to oasis-login as OSG user.
 
-```
-voms-proxy-init -voms osg
-gsissh ouser.osg@oasis-login.grid.iu.edu
-```
+> voms-proxy-init -voms osg
+> gsissh ouser.osg@oasis-login.grid.iu.edu
 
 3. Navigate to IU-GALAXY/blastdb directory
 
-```
-cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
-```
+> cd /home/ouser.osg/cvmfs/projects/IU-GALAXY/blastdb
 
 4. Run download script.
 
@@ -216,9 +205,7 @@ Make sure all download was successful (blast DB contained in each new directorie
 
 6. Publish oasis
 
-```
-osg-oasis-update
-```
+> osg-oasis-update
 
 Update process make take a while, and it will take another day or so until most OSG sites will have the updated OASIS content.
 
