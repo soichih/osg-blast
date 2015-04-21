@@ -5,137 +5,29 @@ import sys
 import os
 import glob
 import resource
-#import gzip
-
-#default is 500 in blast - need to match with blast.opt(in setup.py and setup_userdb.py)
-#increasing max_target_seqs increases virtual memory usage and causes batch manager to SIGKILL.
-#NCBI article suggests to set ulimit, or use BATCH_SIZE env for now, let's set this to small 
-#(compared to default 500) to workaround the memory issue
-#http://www.ncbi.nlm.nih.gov/books/NBK1763/
-max_target_seqs=50
-
-#http://biopython.org/DIST/docs/tutorial/Tutorial.html#htoc82
-#from Bio.Blast import NCBIXML
-#result_handle = open("my_blast.xml")
-#blast_record = NCBIXML.read(result_handle)
-
-#blockname=sys.argv[1]
-def merge(blockname):
-    template_doc = None
-
-    #group all iterations on query definition
-    queries = {}
-    part=0
-    while True:
-        path = "output.qb_"+str(blockname)+".db_"+str(part)
-        if not os.path.exists(path):
-            break 
-
-        #xml_file = gzip.open(path, "r")
-        xml_file = open(path, "r")
-
-        xml = xml_file.read() 
-        doc = libxml2.parseDoc(xml)
-        xml_file.close()
-
-        #use first doc as template
-        if template_doc == None:
-            template_doc = doc
-
-        iterations = doc.xpathEval("//Iteration")
-        for iteration in iterations:
-            query_id = iteration.xpathEval("Iteration_query-ID")[0].content
-            #query_def = iteration.xpathEval("Iteration_query-def")[0].content
-            if not query_id in queries.keys():
-                queries[query_id] = [iteration]
-            else:
-                queries[query_id].append(iteration)
-
-        usage = resource.getrusage(resource.RUSAGE_SELF)
-        part+=1
-
-    if template_doc == None:
-        print "no result for ",blockname
-        sys.exit(1)
-
-    def getevalue(hit):
-        first_hit = hit.xpathEval("Hit_hsps/Hsp")[0]
-        #print dir(first_hit)
-        #sys.exit()
-        evalue = first_hit.xpathEval("Hsp_evalue")[0].content
-        #print evalue
-
-        return float(evalue)
-
-    #merge all hits for each query and sort by evalue
-    allhits_sorted = {}
-    for query_id in queries.keys():
-        iterations = queries[query_id] 
-        print query_id
-        print "merging",len(iterations),"iterations"
-        allhits = []
-        for iteration in iterations:
-            hits = iteration.xpathEval("Iteration_hits/Hit")
-            allhits += hits
-
-        allhits.sort(key = getevalue)
-        allhits_sorted[query_id] = allhits 
-
-    #use template which contains list of queries and populate merged data
-    iterations = template_doc.xpathEval("//Iteration")
-
-    #insert hits back (upto -max-target_seqs)
-    for iteration in iterations:
-        query_id = iteration.xpathEval("Iteration_query-ID")[0].content
-        print "adding hits for",query_id
-
-        #empty hits under iteration_hits
-        hitsnode = iteration.xpathEval("Iteration_hits")[0]
-        for hit in hitsnode.xpathEval("Hit"):
-            hit.unlinkNode()
-
-        #add real hits
-        hitnum=1
-        realhits = allhits_sorted[query_id]
-        for hit in realhits:
-            #reset hitnum
-            hitnode = hit.xpathEval("Hit_num")[0]
-            hitnode.setContent(str(hitnum))
-
-            #print "\tbefore addig hit",hitnum,"\ttotal now:",len(hitsnode.xpathEval("Hit"))
-            hitsnode.addChild(hit.copyNode(1))
-            #print "\tadded - total now:",len(hitsnode.xpathEval("Hit"))
-
-            hitnum+=1
-            #simulate default -max_target_seqs (=500) so that we don't get too many hits
-            if hitnum > max_target_seqs:
-                break
-
-    #output 
-    outpath = "merged.qb_"+str(blockname)
-    print outpath
-    f = open(outpath, "w")
-    template_doc.saveTo(f)
-    f.close()
-
-    #remove all original results for this block (to save diskspace)
-    #part=0
-    #while True:
-    #    path = "output/"+blockname+".db_"+str(part)+".result.gz"
-    #    if not os.path.exists(path):
-    #        break 
-    #    print "removing",path
-    #    os.remove(path)
-    #    part+=1
+import subprocess
 
 #run qb merge
 block=0
 while True:
     if not os.path.exists("output.qb_"+str(block)+".db_0"):
         break
-    merge(block) 
+
+    #need to call this as separate process - so that libxml2 will let go of the virtual memory
+    #TODO - pipe stderr to this process's stderr..
+    try:
+        ret = subprocess.call(["osg-blast-merge5.block.py", str(block)], stderr=subprocess.STDOUT)
+        if ret < 0:
+            print "osg-blast-merge5.block.py killed by signal", -ret
+        elif ret > 0:
+            print "osg-blast-merge5.block.py returned ", ret
+            sys.exit(1)
+    except OSError, e:
+        print "osg-blast-merge5.block.py execution failed:", e
+
     block+=1
 
+#merge(26)
 
 #then merge all qbs
 output_path = "merged"

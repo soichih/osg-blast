@@ -5,13 +5,12 @@ echo "hostname" `hostname`
 echo "OSG env"
 set | grep OSG
 
-echo "sourcing params";
+echo "sourcing params.sh";
 cat params.sh
+source ./params.sh
 
 echo "prevent condor to issue hold event before terminating with any error code"
 touch output
-
-source ./params.sh
 
 #export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
 #export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
@@ -19,9 +18,11 @@ source ./params.sh
 #limit memory at 2G
 ulimit -v 2048000
 
+
 if [ $oasis_dbpath ]; then
     echo "using oasis db"
 
+    #blast app and irod binary comes from oasis. we need oasis
     if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
         env | sort
         echo "can't access /cvmfs/oasis.opensciencegrid.org"
@@ -52,8 +53,44 @@ if [ $oasis_dbpath ]; then
         echo "failed to untar $oasis_dbpath/$dbname.tar.gz - let's retry.."
         exit 16
     fi
+
+elif [ $irod_dbpath ]; then
+    echo "using irod db"
+
+    #blast app and irod binary comes from oasis. we need oasis
+    if [ ! -d /cvmfs/oasis.opensciencegrid.org ]; then
+        env | sort
+        echo "can't access /cvmfs/oasis.opensciencegrid.org"
+        exit 68
+    fi
+
+    #create subdirectory so that condor won't try to ship it back to submit host accidentally
+    mkdir blastdb
+    date +%c
+    echo "copying $dbname.tar.gz from $irod_dbpath"
+    
+    #/cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz
+    #new version of icp-osg that does retries
+    /cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/v0.8/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz 
+
+    ret=$?
+    if [ $ret -ne 0 ]
+    then
+        echo "failed to download blast db part via irods (retcode:$ret)"
+        exit 3
+    else
+        date +%c
+        echo "untarring blastdb"
+        (cd blastdb && tar -xzf $dbname.tar.gz)
+
+        if [ $? -ne 0 ]; then 
+            echo "failed to untar $dbname.tar.gz - let's retry.."
+            exit 17
+        fi
+    fi 
 else
-    echo "downloading user db - through squid";
+    #user db doesn't use OASIS!
+    echo "downloading user db from $user_dbpath - through squid";
 
     #need to deal with squid server.. https://twiki.grid.iu.edu/bin/view/Documentation/OsgHttpBasics
     export OSG_SQUID_LOCATION=${OSG_SQUID_LOCATION:-UNAVAILABLE}
@@ -61,11 +98,12 @@ else
         echo "using squid:" $OSG_SQUID_LOCATION
         export http_proxy=$OSG_SQUID_LOCATION
 
-        #test squid access (and throughput... TODO - I need to use reliable, but large enough test data)
-        wget -q --timeout=2 http://google.com
+        #test squid access (per goc ticket 22099, switching to use cern.ch)
+        wget -q --timeout=2 http://cern.ch
         if [ $? -ne 0 ]; then
-            echo "wget failed through squid.."
-            exit 15
+            echo "wget failed through squid.. $OSG_SQUID_LOCATION.. trying without squid"
+            #exit 15
+            unset http_proxy
         fi
     else
         echo "OSG_SQUID_LOCATION is not set... not using squid"
@@ -75,7 +113,7 @@ else
     time wget -q --timeout=30 $user_dbpath/$dbname.tar.gz
     if [ $? -ne 0 ]; then 
         echo "failed to download $user_dbpath/$dbname.tar.gz"
-        exit 16
+        exit 18
     fi
 
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
@@ -134,17 +172,34 @@ case $blast_ret in
     echo "out of memory"
     exit 2
     ;;
+126)
+    echo "blast binary can't be executed"
+    exit $blast_ret
+    ;;
 127)
-    echo "no blastp"
-    exit 12
+    echo "no blast binary"
+    exit $blast_ret
+    ;;
+128)
+    #I don't know what this is 
+    echo "invalid argument to exit"
+    exit $blast_ret
+    ;;
+135)
+    echo "probably killed by SIGEMT (128+7).. probably terminated with a core dump."
+    exit $blast_ret
     ;;
 137)
     echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
-    exit 2
+    exit $blast_ret
     ;;
 139)
     echo "blast segfaulted"
-    exit 14
+    exit $blast_ret
+    ;;
+143)
+    echo "probably killed by SIGTERM(128+14).."
+    exit $blast_ret
     ;;
 255)
     echo "NCBI C++ Exception?"
@@ -152,8 +207,44 @@ case $blast_ret in
     ;;
 *)
     echo "unknown error code: $blast_ret"
-    exit 9
+    exit $blast_ret
     ;;
 esac
+
+#http://unixhelp.ed.ac.uk/CGI/man-cgi?signal+7
+#       Signal     Value     Action   Comment
+#       -------------------------------------------------------------------------
+#       SIGHUP        1       Term    Hangup detected on controlling terminal
+#                     or death of controlling process
+#       SIGINT        2       Term    Interrupt from keyboard
+#       SIGQUIT       3       Core    Quit from keyboard
+#       SIGILL        4       Core    Illegal Instruction
+#       SIGABRT       6       Core    Abort signal from abort(3)
+#       SIGFPE        8       Core    Floating point exception
+#       SIGKILL       9       Term    Kill signal
+#       SIGSEGV      11       Core    Invalid memory reference
+#       SIGPIPE      13       Term    Broken pipe: write to pipe with no readers
+#       SIGALRM      14       Term    Timer signal from alarm(2)
+#       SIGTERM      15       Term    Termination signal
+#       SIGUSR1   30,10,16    Term    User-defined signal 1
+#       SIGUSR2   31,12,17    Term    User-defined signal 2
+#       SIGCHLD   20,17,18    Ign     Child stopped or terminated
+#       SIGCONT   19,18,25    Cont    Continue if stopped
+#       SIGSTOP   17,19,23    Stop    Stop process
+#       SIGTSTP   18,20,24    Stop    Stop typed at tty
+#       SIGTTIN   21,21,26    Stop    tty input for background process
+#       SIGTTOU   22,22,27    Stop    tty output for background process
+
+#return code
+# 0 - job complete
+# 1 - input error 
+# 2 - out of memory
+# 12 - error in blast engine
+# 13 - NCBI C++ Exception
+# 15 - squid failurer
+# 16 - failed to untar oasis tar.gz
+# 17 - failed to untar irod tar.gz
+# 18 - failed to untar user tar.gz
+# >125 - blast executable signal
 
 exit $blast_ret

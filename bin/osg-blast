@@ -35,8 +35,8 @@ if(!config.user) {
 fs.writeFile(config.rundir+"/pid.txt", process.pid.toString());
 
 process.on('uncaughtException', function(err) {
-    console.log('osg-blast: Caught exception: ' + err);
-    console.trace(err);
+    console.log('osg-blast: Caught exception: ' + err+"\n");
+    //console.trace(err);
     if(config.oplog) {
         fs.appendFile(config.oplog, "osg-blast: uncaughtException\n"+err);
     }
@@ -49,12 +49,32 @@ function status(status, message) {
     } 
     fs.writeFileSync(config.rundir+"/status.txt", status+"\n"+message+"\n");
     var d = new Date();
-    console.log(status + " :: " + d.toString() + " :: " + message);
+    console.log(status + " :: " + d.toString() + " :: " + message); //no newline?
     prev_status = status;
 }
 
 osgblast.run(config, status).then(function() {
-    console.log("workflow completed successfully");
+    console.log("workflow completed successfully\n");
+    //don't kill - other wise some output file might not be written to output directory
+    //process.exit(0);
 }).catch(function(err) {
-    console.log("workflow threw exception:"+err);
+    console.log("workflow threw exception:"+err+" ..terminating process\n");
+    process.exit(1);
 }).done();
+
+//SIGINT/SIGTERM will stop all workflows running (should be only 1 for osg-blast)
+process.on('SIGINT', function(code) {
+    console.log("osg-blast received SIGINT(ctrl+c) - requesting workflow stop");
+    osgblast.stop(function() {
+        console.log("exising now");
+        process.exit(code);
+    });
+});
+process.on('SIGTERM', function(code) {
+    console.log("osg-blast received SIGTERM(kill) - requesting workflow stop");
+    osgblast.stop(function() {
+        console.log("exising now");
+        process.exit(code);
+    });
+});
+

@@ -60,14 +60,39 @@ function load_db_info(data) {
     };
 }
 
+var workflow_registry = {
+    workflows: [], //list of all workflows
+    remove: function(workflow) {
+        workflow.remove();
+        var i = this.workflows.indexOf(workflow);
+        if(~i) {
+            console.log("removing workflow "+i);
+            this.workflows.splice(i, 1);
+        }
+    },
+    create: function() {
+        var workflow = new osg.Workflow();
+        this.workflows.push(workflow);
+        return workflow;
+    },
+    removeall: function() {
+        this.workflows.forEach(function(workflow) {
+            console.log("removing workflow "+workflow.id);
+            workflow.remove();
+        });
+        this.workflows = []; //empty it
+    }
+};
+
+module.exports.stop = function() {
+    workflow_registry.removeall();
+};
+
 module.exports.run = function(config, status) {
-
-    //console.log(workflow_start.toString() + " :: osgblast workflow starting with following config");
-    //console.dir(config);
-
     //some default
     config = extend({
-        tmpdir: '/tmp'
+        tmpdir: '/tmp',
+        x509userproxy: '/local-scratch/iugalaxy/blastcert/osgblast.proxy'
     }, config); 
 
     /* config should look like
@@ -87,29 +112,40 @@ module.exports.run = function(config, status) {
         "+ProjectName": config.project,
         "+PortalUser": config.user,
 
+
         //TODO - untested -- is this really a good idea?
         "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
 
         "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
+                        "(GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") && "+      //code 3-ed left and right for irods
                         //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
                         //"(GLIDEIN_ResourceName =!= \"Tusker\") && "+ //test routinely timeout on Tusker
-                        "(Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
-                        "(Disk >= 10*1024*1024)" //10G should be more than enough enough
+                
+                        //This gets set automatically
+                        //"(TARGET.Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
+
+                        "(TARGET.Disk >= 10*1024*1024)" //10G should be more than enough enough
     }
 
-    var workflow = new osg.Workflow();
+    var workflow = workflow_registry.create();
 
     //output operational log (if config.oplog is set)
     function oplog(log) {
         if(config.oplog) {
             log.date =  new Date();
-            fs.appendFile(config.oplog, JSON.stringify(log, null, 4)+"\n",  function (err) {
-                if(err) {
-                    console.log("failed to output oplog:"+config.oplog+"\n"+err);
-                }
-            }); 
+            try {
+                var str = JSON.stringify(log, null, 4);
+                fs.appendFile(config.oplog, str+"\n",  function (err) {
+                    if(err) {
+                        console.log("failed to output oplog:"+config.oplog+"\n"+err);
+                    }
+                });
+            } catch (e) {
+                console.log("oplog: couldn't stringify. dumping to console");
+                console.dir(log);
+            }
         }
     }
 
@@ -119,21 +155,22 @@ module.exports.run = function(config, status) {
         var dbtokens = config.db.split(":");
         if(dbtokens[0] == "oasis") {
             //add oasis requirements for condor Requirements
-            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
+            //condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
+            condor.Requirements = "(TARGET.CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
 
             console.log("processing oasis dbinfo");
-            //config._db_type = "oasis";
             //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
-            config._oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+
+            var oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
+            config._oasis_dbpath = oasis_dbpath;
+
             config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
-            var pdir = config._oasis_dbpath+"/"+config._db_name;
-            status('TESTING', "loading dbinfo for oasisdb:"+pdir);
+            var pdir = oasis_dbpath+"/"+config._db_name;
+            status('TESTING', "loading dbinfo from oasisdb:"+pdir);
             if(fs.existsSync(pdir+".pal")) {
-                //config._db_type = "prot";
                 var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
                 config.dbinfo = load_db_info(data);
             } else if(fs.existsSync(pdir+".nal")) {
-                //config._db_type = "nucl";
                 var data = fs.readFileSync(pdir+".nal", {encoding: 'utf8'});
                 config.dbinfo = load_db_info(data);
             } else {
@@ -144,6 +181,35 @@ module.exports.run = function(config, status) {
                 };
             }
             status('TESTING', "oasis dbinfo loaded");
+            deferred.resolve(); 
+        } else if(dbtokens[0] == "irods") {
+            //we use irods binary stored in oasis.
+            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && "+condor.Requirements;
+            //we need to use osg-blast/osg-xsede.grid.iu.edu service cert
+            //condor.x509userproxy = "/local-scratch/iugalaxy/blastcert/osgblast.proxy"; // blastcert/proxy_init.sh
+            condor.x509userproxy = path.resolve(config.x509userproxy);
+
+            console.log("processing irods dbinfo");
+            config._irod_dbpath = "irodse://goc@irods.fnal.gov:1247?/osg/home/goc/"+dbtokens[1];
+
+            config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
+            var pdir = "/local-scratch/iugalaxy/blastdb/"+dbtokens[1]+"/"+config._db_name;
+            status('TESTING', "loading dbinfo from "+pdir);
+            if(fs.existsSync(pdir+".pal")) {
+                var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else if(fs.existsSync(pdir+".nal")) {
+                var data = fs.readFileSync(pdir+".nal", {encoding: 'utf8'});
+                config.dbinfo = load_db_info(data);
+            } else {
+                //single part db 
+                config.dbinfo = {
+                    title: config._db_name, //TODO - pull real name from db?
+                    parts: [config._db_name]
+                };
+            }
+            status('TESTING', "irods dbinfo loaded");
+            console.dir(config.dbinfo);
             deferred.resolve(); 
         } else {
             status('TESTING', "processing user dbinfo");
@@ -213,7 +279,7 @@ module.exports.run = function(config, status) {
         workflow.test_resubmits = 10; //max number of time test job should be resubmitted
         workflow.test_job_num = 5; //number of jobs to submit for test
         workflow.test_job_block_size = 32; //number of query to test per job
-        workflow.target_job_duration = 1000*60*90; //shoot for 90 minutes
+        workflow.target_job_duration = 1000*60*60; //shoot for 60 minutes
 
         //testrun will reset this based on execution time of test jobs (and resource usage in the future)
         workflow.block_size = 2000; 
@@ -264,6 +330,8 @@ module.exports.run = function(config, status) {
             executable: __dirname+'/blast.sh',
             receive: ['output'],
             timeout: 40*60*1000, 
+            timeout_reason: "test job timeout in 40 minutes", 
+
             description: 'test blast job on dbpart:'+part+' with queries:'+fastas.length,
             condor: condor,
 
@@ -300,6 +368,9 @@ module.exports.run = function(config, status) {
                             fs.writeSync(fd, "export inputquery=test.fasta\n");
                             if(config._oasis_dbpath) {
                                 fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
+                            }
+                            if(config._irod_dbpath) {
+                                fs.writeSync(fd, "export irod_dbpath="+config._irod_dbpath+"\n");
                             }
                             if(config._user_dbpath) {
                                 fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
@@ -369,7 +440,7 @@ module.exports.run = function(config, status) {
 
         job.on('exception', function(info) {
             console.log(job.id+' test:'+part+' threw exception on '+job.resource_name+' :: '+info.Message);
-            oplog({job: job, part: part, info: info});
+            oplog({job: job, part: part, message: "exception: "+info.Message});
             /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' test:'+part+' exception on '+job.resource_name+' :: '+info.Message+"\n");
@@ -384,18 +455,20 @@ module.exports.run = function(config, status) {
                 fs.readFile(job.stderr, 'utf8', function (err,data) {
                     console.log(data);
                     stopwf('FAILED', 'test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info));
-                    oplog({job: job, part: part, msg: "test job held", info:info});
+                    oplog({job: job, part: part, msg: "test job held: " + info.msg, info: info.info});
                 });
             });
         });
 
         job.on('evict', function(info) {
-            console.log('job evicted');
+            //I am not sure if I've ever seen this happen
+            console.log(job.id+' test:'+part+' evicted while running on '+job.resource_name);
             console.dir(info);
+            //TODO - I believe evict events are followed by abort/terminate type event.. so I don't have to do anythig here?
         });
 
         job.on('abort', function(info) {
-            stopwf('ABORTED', 'test aborted');
+            stopwf('ABORTED', 'test job aborted');
         });
 
         job.on('terminate', function(info) {
@@ -409,13 +482,9 @@ module.exports.run = function(config, status) {
         var now = new Date();
         if(info.ret == 0) {
             //start copying file to rundir
-            fs.createReadStream(job.rundir+'/output')
-                .pipe(fs.createWriteStream(config.rundir+'/output/output.'+name));
-
-            //TODO - what should I do with these information?
-            //console.log(job.id+" max_image_size:"+job.max_image_size+" max_memory_size:"+job.max_memory_usage+" max_resident_set_size:"+job.max_resident_set_size);
-
+            fs.createReadStream(job.rundir+'/output').pipe(fs.createWriteStream(config.rundir+'/output/output.'+name));
             success(job, info);
+/*
         } else if(info.ret > 0 && info.ret < 10) {
             console.log("----------------------------------permanent error---------------------------------");
             fs.readFile(job.stdout, 'utf8', function (err,data) {
@@ -431,17 +500,16 @@ module.exports.run = function(config, status) {
                     //oplog({job: job, msg: "job failed permanently", info:info});
                 }); 
             }); 
+*/
         } else {
+            //let's always resubmit .. until retry count reaches
             if(info.ret == 15) {
                 oplog({msg : "squid server mulfunctioning at site: "+job.resource_name});
-                /*
-                if(config.opissue_log) {
-                    fs.appendFile(config.opissue_log, "squid server mulfunctioning on site:"+job.resource_name+"\n");
-                }
-                */
             }
+
             status(null, job.id+' '+name+' temporarily failed (code '+info.ret+').. resubmitting');
             resubmit(job);
+
             fs.readFile(job.stdout, 'utf8', function (err,data) {
                 console.log("----------------------------------stdout------------------------------------------");
                 console.log(data);
@@ -489,8 +557,6 @@ module.exports.run = function(config, status) {
     }
 
     function submitjob(block, dbpart, submitted, success, resubmit, stopwf) {
-        //console.log("submitting job block:"+block+" dbpart:"+dbpart);
-
         var _rundir = null; //_rundir for this particualar job (not config.rundir)
         var starttime;
 
@@ -499,6 +565,7 @@ module.exports.run = function(config, status) {
             receive: ['output'],
             //arguments: [],
             timeout: 3*60*60*1000, //kill job in 3 hours (job should finish in 1.5 hours)
+            timeout_reason: "each job should not run more than 3 hours",
 
             //timeout: 60*1000, //debug.. 1 minutes
 
@@ -542,6 +609,9 @@ module.exports.run = function(config, status) {
                             if(config._oasis_dbpath) {
                                 fs.writeSync(fd, "export oasis_dbpath="+config._oasis_dbpath+"\n");
                             }
+                            if(config._irod_dbpath) {
+                                fs.writeSync(fd, "export irod_dbpath="+config._irod_dbpath+"\n");
+                            }
                             if(config._user_dbpath) {
                                 fs.writeSync(fd, "export user_dbpath="+config._user_dbpath+"\n");
                             }
@@ -569,6 +639,11 @@ module.exports.run = function(config, status) {
 
             console.log(job.id+" submitted job qb:"+block+" dbpart:"+dbpart+" rundir:"+job.rundir);
             submitted(null); //null for err
+
+            if(workflow.removed) {
+                console.log("workflow already removed .. removing job");
+                job.remove();
+            }
         });
         job.on('submitfail', function(err) {
             console.log("failed to submit job :: "+err);
@@ -587,12 +662,10 @@ module.exports.run = function(config, status) {
 
         job.on('imagesize', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' imagesize update '+JSON.stringify(info));
-            oplog({info: info});
+            //oplog({info: info});
         });
 
         job.on('hold', function(info) {
-            //console.log(job.id + 'held');
-            //console.dir(info);
             oplog({job: job, msg: "hold event", info: info});
 
             var now = new Date();
@@ -601,12 +674,11 @@ module.exports.run = function(config, status) {
                     stopwf('FAILED', job.id+' qb:'+block+' db:'+dbpart+" held but couldn't run condor_q .. aborting workflow :"+err);
                     oplog({job: job, msg: "condor_q failed", err: err});
                 } else {
-                    console.dir(data);
+                    //console.dir(data);
                     if(data.JobRunCount < 3) {
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
                             console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. JobRunCount: "+data.JobRunCount+" ... releasing");
-                            job.release();
                             break;
                         default: 
                             //console.log(typeof info.HoldReasonSubCode);
@@ -626,9 +698,19 @@ module.exports.run = function(config, status) {
                             console.dir(info);
 
                             oplog({job: job, data: data, info: info});
-
-                            job.release();
                         }
+
+                        //rerun
+                        var stat = workflow.get_runtime_stats(job.resource_name);
+
+                        //debug
+                        console.log("dumping runtime stat for "+job.resource_name);
+                        console.dir(stat);
+                        if(stat && stat.holds && stat.holds.length > 10) {
+                            oplog({msg: job.resource_name + " had too many holds.. blacklisting this site for this workflow"});
+                            condor.Requirements = "(GLIDEIN_ResourceName =!= \""+job.resource_name+"\") && "+condor.Requirements;
+                        }
+                        job.release();
                     } else {
                         stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
                         oplog({job: job, msg: "ran too many times.. aborting workflow", data: data});
@@ -644,15 +726,25 @@ module.exports.run = function(config, status) {
         });
         job.on('exception', function(info) {
             console.log(job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message);
-            oplog({job: job, block: block, dbpart: dbpart, info: info});
+            oplog({job: job, block: block, dbpart: dbpart, message: "exception: " + info.Message});
             /*
             if(config.opissue_log) {
                 fs.appendFile(config.opissue_log, job.id+' qb:'+block+' db:'+dbpart+' exception on '+job.resource_name+' :: '+info.Message+"\n");
             }
             */
         });
+        job.on('evict', function(info) {
+            //I am not sure if I've ever seen this happen
+            console.log(job.id+' qb:'+block+' db:'+dbpart+' evicted on '+job.resource_name);
+            console.dir(info);//debug
+            //TODO - I believe evict events are followed by abort/terminate type event.. so I don't have to do anythig here?
+        });
+
         job.on('abort', function(info) {
-            stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
+            //stopwf('ABORTED', job.id+' qb:'+block+' db:'+dbpart+' job aborted.. stopping workflow');
+            console.log(job.id+' qb:'+block+' db:'+dbpart+' aborted while running on '+job.resource_name+' -- releasing..:: '+info.Message);
+            console.dir(info); //debug
+            job.release(); //TODO - can I release an aborted job?
         });
 
         job.on('terminate', function(info) {
@@ -701,7 +793,7 @@ module.exports.run = function(config, status) {
 
         function success(job, info) {
             results.push(info); 
-            status('TESTING', job.id+' test job successfully completed in '+info.walltime+'(msec) :: finished:'+results.length+'/'+fasta_blocks.length);
+            status('TESTING', job.id+' test job successfully completed in '+info.walltime+'ms :: finished:'+results.length+'/'+fasta_blocks.length);
 
             //all test completed?
             if(results.length == fasta_blocks.length) {
@@ -710,7 +802,7 @@ module.exports.run = function(config, status) {
         }
 
         function analyze_results() {
-            console.log("test jobs walltimes(msec)");
+            console.log("test jobs walltimes(ms)");
             console.dir(results);
 
             //calculate average time it took to run
@@ -718,7 +810,7 @@ module.exports.run = function(config, status) {
             console.log("sum:"+sum);
             console.log("size:"+results.length);
             var average = sum / results.length; 
-            console.log("average job walltime(msec):"+average);
+            console.log("average job walltime(ms):"+average);
 
             //compute standard deviation
             var sumd = results.reduce(function(d, result) {
@@ -770,7 +862,7 @@ module.exports.run = function(config, status) {
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.remove();
+            workflow_registry.remove(workflow);
             deferred.reject(st+" :: " + err);
         }
 
@@ -815,7 +907,7 @@ module.exports.run = function(config, status) {
         console.log("number of blocks:"+blocks+" number of db parts:"+config.dbinfo.parts.length);
         function success(job, info) {
             jobdone++;
-            status('RUNNING', job.id+' successfully completed in '+info.walltime+'(msec) :: finished:'+jobdone+'/'+jobnum);
+            status('RUNNING', job.id+' successfully completed in '+info.walltime+'ms :: finished:'+jobdone+'/'+jobnum);
 
             //job completed?
             if(jobdone == jobnum) {
@@ -852,7 +944,7 @@ module.exports.run = function(config, status) {
         function stopwf(st, err) {
             status(st, err);
             post_workflow();
-            workflow.remove();
+            workflow_registry.remove(workflow);
             deferred.reject(st+" :: " + err);
         }
 

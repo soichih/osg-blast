@@ -1,38 +1,38 @@
 {
-    "name": "osg-blast",
-    "version": "2.0.20",
-    "description": "blast workflow for open science grid",
-    "main": "index.js",
-    "bin": {
-        "osg-blast": "./bin/osg-blast",
-        "osg-blast-merge5": "./bin/osg-blast-merge5",
-        "osg-blast-merge6": "./bin/osg-blast-merge6"
-    },
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/soichih/osg-blast"
-    },
-    "keywords": [
-        "htcondor",
-        "condor",
-        "osg"
-    ],
-    "author": "Soichi Hayashi",
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/soichih/osg-blast"
-    },
-    "dependencies": {
-        "osg": "*",
-        "temp": "*",
-        "async": "*",
-        "merge": "*",
-        "q": "*",
-        "readblock": "*",
-        "rimraf": "*",
-        "which": "*"
-    }
+  "name": "osg-blast",
+  "version": "2.0.30",
+  "description": "blast workflow for open science grid",
+  "main": "app.js",
+  "bin": {
+    "osg-blast": "./bin/osg-blast",
+    "osg-blast-merge5": "./bin/osg-blast-merge5",
+    "osg-blast-merge6": "./bin/osg-blast-merge6"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/soichih/osg-blast"
+  },
+  "keywords": [
+    "htcondor",
+    "condor",
+    "osg"
+  ],
+  "author": "Soichi Hayashi",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/soichih/osg-blast"
+  },
+  "dependencies": {
+    "async": "*",
+    "merge": "*",
+    "osg": "*",
+    "q": "^2.0.2",
+    "readblock": "*",
+    "rimraf": "*",
+    "temp": "*",
+    "which": "*"
+  }
 }
