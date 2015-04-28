@@ -66,18 +66,20 @@ var workflow_registry = {
         workflow.remove();
         var i = this.workflows.indexOf(workflow);
         if(~i) {
-            console.log("removing workflow "+i);
+            console.log("removing a workflow "+i);
             this.workflows.splice(i, 1);
         }
     },
     create: function() {
-        var workflow = new osg.Workflow();
+        var workflow = new osg.Workflow({
+            max_concurrent_submit: 4000
+        });
         this.workflows.push(workflow);
         return workflow;
     },
     removeall: function() {
         this.workflows.forEach(function(workflow) {
-            console.log("removing workflow "+workflow.id);
+            console.log("removing all workflow "+workflow.id);
             workflow.remove();
         });
         this.workflows = []; //empty it
@@ -193,7 +195,8 @@ module.exports.run = function(config, status) {
             config._irod_dbpath = "irodse://goc@irods.fnal.gov:1247?/osg/home/goc/"+dbtokens[1];
 
             config._db_name = dbtokens[1].split(".")[0]; //nt.1-22-2014  >> nt
-            var pdir = "/local-scratch/iugalaxy/blastdb/"+dbtokens[1]+"/"+config._db_name;
+            //var pdir = "/local-scratch/iugalaxy/blastdb/"+dbtokens[1]+"/"+config._db_name;
+            var pdir = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1]+"/"+config._db_name;
             status('TESTING', "loading dbinfo from "+pdir);
             if(fs.existsSync(pdir+".pal")) {
                 var data = fs.readFileSync(pdir+".pal", {encoding: 'utf8'});
@@ -675,10 +678,10 @@ module.exports.run = function(config, status) {
                     oplog({job: job, msg: "condor_q failed", err: err});
                 } else {
                     //console.dir(data);
-                    if(data.JobRunCount < 3) {
+                    if(data.NumJobStarts === undefined || data.NumJobStarts < 3) {
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
-                            console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. JobRunCount: "+data.JobRunCount+" ... releasing");
+                            console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. NumJobStarts: "+data.NumJobStarts+" ... releasing");
                             break;
                         default: 
                             //console.log(typeof info.HoldReasonSubCode);
@@ -694,7 +697,7 @@ module.exports.run = function(config, status) {
                             }); 
 
                             console.log("Unknown hold subcode:"+info.HoldReasonSubCode);
-                            console.log(job.id+' qb:'+block+' db:'+dbpart+" JobRunCount: "+data.JobRunCount+" ... releasing");
+                            console.log(job.id+' qb:'+block+' db:'+dbpart+" NumJobStarts: "+data.NumJobStarts+" ... releasing");
                             console.dir(info);
 
                             oplog({job: job, data: data, info: info});
@@ -707,12 +710,13 @@ module.exports.run = function(config, status) {
                         console.log("dumping runtime stat for "+job.resource_name);
                         console.dir(stat);
                         if(stat && stat.holds && stat.holds.length > 10) {
+                            //TODO - Miron says there is a condor option to make sure that the job doesn't run on the same site if it's held
                             oplog({msg: job.resource_name + " had too many holds.. blacklisting this site for this workflow"});
                             condor.Requirements = "(GLIDEIN_ResourceName =!= \""+job.resource_name+"\") && "+condor.Requirements;
                         }
                         job.release();
                     } else {
-                        stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.JobRunCount+' .. aborting workflow. ');
+                        stopwf('FAILED', 'Job:'+job.id+' ran too many times:'+data.NumJobStarts+' .. aborting workflow. ');
                         oplog({job: job, msg: "ran too many times.. aborting workflow", data: data});
                     }
                 }
@@ -965,7 +969,7 @@ module.exports.run = function(config, status) {
             },
             function() {
                 //console.log("finished submitting everything");
-                status("RUNNING", "submitted all jobs:"+jobnum);
+                status("RUNNING", "queued all jobs:"+jobnum);
             }
         );
         return deferred.promise;
@@ -973,7 +977,7 @@ module.exports.run = function(config, status) {
 
     function post_workflow() {
         var log = workflow.print_runtime_stats();
-        status(null, "Workflow statistics:\n"+log);
+        status(null, log);
     }
 };
 

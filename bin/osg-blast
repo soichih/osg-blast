@@ -4,6 +4,9 @@ var fs = require('fs');
 var path = require('path');
 var osgblast = require("../");
 
+var package = require("../package");
+console.log("osg-blast version "+package.version);
+
 var config_path;
 if (process.argv.length == 3) {
     config_path = process.argv[2];
