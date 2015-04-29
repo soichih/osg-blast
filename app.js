@@ -389,7 +389,10 @@ module.exports.run = function(config, status) {
                             if(config.dbinfo.length) {
                                 fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
                             }
-                            fs.writeSync(fd, "export blast_opts=\""+config.blast_opts+"\"\n");
+                            if(config.blast_opts) {
+                                var quoted_opts = config.blast_opts.replace(/"/g, '\\"');
+                                fs.writeSync(fd, "export blast_opts=\""+quoted_opts+"\"\n");
+                            }
                             fs.close(fd);
                             next();
                         });
@@ -623,7 +626,10 @@ module.exports.run = function(config, status) {
                             if(config.dbinfo.length) {
                                 fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
                             }
-                            fs.writeSync(fd, "export blast_opts=\""+config.blast_opts+"\"\n");
+                            if(config.blast_opts) {
+                                var quoted_opts = config.blast_opts.replace(/"/g, '\\"');
+                                fs.writeSync(fd, "export blast_opts=\""+quoted_opts+"\"\n");
+                            }
                             fs.close(fd);
                             next();
                         });
@@ -679,12 +685,15 @@ module.exports.run = function(config, status) {
                 } else {
                     //console.dir(data);
                     if(data.NumJobStarts === undefined || data.NumJobStarts < 5) {
+                        console.log("job held for "+job.id+' qb:'+block+' db:'+dbpart+' ');
+                        console.dir(info);
+                        oplog({job: job, data: data, info: info});
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
-                            console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. NumJobStarts: "+data.NumJobStarts+" ... releasing");
+                        case 2: //can't send file
                             break;
                         default: 
-                            //console.log(typeof info.HoldReasonSubCode);
+                            //unknown subcode.. let's write it to a file for records
                             fs.readFile(job.stdout, 'utf8', function (err,data) {
                                 console.log("------stdout-------");
                                 console.log(data);
@@ -695,12 +704,6 @@ module.exports.run = function(config, status) {
                                 console.log(data);
                                 fs.writeFile(config.rundir+'/held.stderr.'+block+'.'+dbpart+'.'+now.getTime(), data);
                             }); 
-
-                            console.log("Unknown hold subcode:"+info.HoldReasonSubCode);
-                            console.log(job.id+' qb:'+block+' db:'+dbpart+" NumJobStarts: "+data.NumJobStarts+" ... releasing");
-                            console.dir(info);
-
-                            oplog({job: job, data: data, info: info});
                         }
 
                         //rerun
