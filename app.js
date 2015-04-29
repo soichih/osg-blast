@@ -567,8 +567,8 @@ module.exports.run = function(config, status) {
             executable: __dirname+'/blast.sh',
             receive: ['output'],
             //arguments: [],
-            timeout: 3*60*60*1000, //kill job in 3 hours (job should finish in 1.5 hours)
-            timeout_reason: "each job should not run more than 3 hours",
+            timeout: 4*60*60*1000, //kill job in 4 hours (job should finish in 1.5 hours)
+            timeout_reason: "each job should not run more than 4 hours",
 
             //timeout: 60*1000, //debug.. 1 minutes
 
@@ -678,7 +678,7 @@ module.exports.run = function(config, status) {
                     oplog({job: job, msg: "condor_q failed", err: err});
                 } else {
                     //console.dir(data);
-                    if(data.NumJobStarts === undefined || data.NumJobStarts < 3) {
+                    if(data.NumJobStarts === undefined || data.NumJobStarts < 5) {
                         switch(info.HoldReasonSubCode) {
                         case 1: //timeout
                             console.log(job.id+' qb:'+block+' db:'+dbpart+" timed out. NumJobStarts: "+data.NumJobStarts+" ... releasing");
