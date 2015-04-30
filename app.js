@@ -94,7 +94,9 @@ module.exports.run = function(config, status) {
     //some default
     config = extend({
         tmpdir: '/tmp',
-        x509userproxy: '/local-scratch/iugalaxy/blastcert/osgblast.proxy'
+        x509userproxy: '/local-scratch/iugalaxy/blastcert/osgblast.proxy',
+        no_submit: ['cinvestav'],
+        oasis_min_revision: 3687, //TODO - this should be published whenever GOC updates oasis DB
     }, config); 
 
     /* config should look like
@@ -109,17 +111,22 @@ module.exports.run = function(config, status) {
     }
     */
 
+    var no_submit_requirements = "";
+    config.no_submit.forEach(function(site) {
+        no_submit_requirements += "(GLIDEIN_ResourceName =!= \""+site+"\") && ";
+    });
+
     var condor = {
         //needed to run jobs on osg-xsede
         "+ProjectName": config.project,
         "+PortalUser": config.user,
 
-
         //TODO - untested -- is this really a good idea?
         "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
 
-        "Requirements": "(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
-                        "(GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") && "+      //code 3-ed left and right for irods
+        "Requirements": no_submit_requirements+
+                        //"(GLIDEIN_ResourceName =!= \"cinvestav\") && "+     //cinvestav has an aweful outbound-squid bandwidth (goc ticket 17256)
+                        //"(GLIDEIN_ResourceName =!= \"NWICG_NDCMS\") && "+      //code 3-ed left and right for irods
                         //"(GLIDEIN_ResourceName =!= \"Nebraska\") && "+      //oasis doesn't get refreshed (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Sandhills\") && "+       //OASIS not setup right (works if I specify revision)
                         //"(GLIDEIN_ResourceName =!= \"Crane\") && "+       
@@ -128,7 +135,7 @@ module.exports.run = function(config, status) {
                         //This gets set automatically
                         //"(TARGET.Memory >=  ifthenelse(MemoryUsage isnt undefined,MemoryUsage,1967)) && "+
 
-                        "(TARGET.Disk >= 10*1024*1024)" //10G should be more than enough enough
+                        "(TARGET.Disk >= 10*1024*1024)" //10G should be more than enough
     }
 
     var workflow = workflow_registry.create();
@@ -156,13 +163,11 @@ module.exports.run = function(config, status) {
 
         var dbtokens = config.db.split(":");
         if(dbtokens[0] == "oasis") {
-            //add oasis requirements for condor Requirements
-            //condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && (CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
-            condor.Requirements = "(TARGET.CVMFS_oasis_opensciencegrid_org_REVISION >= 1787) && "+condor.Requirements;
-
+            condor.Requirements = "(HAS_CVMFS_oasis_opensciencegrid_org =?= True) && "+condor.Requirements;
+            condor.Requirements = "(TARGET.CVMFS_oasis_opensciencegrid_org_REVISION >= "+config.oasis_min_revision+") && "+condor.Requirements;
             console.log("processing oasis dbinfo");
+            
             //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
-
             var oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
             config._oasis_dbpath = oasis_dbpath;
 
@@ -390,8 +395,8 @@ module.exports.run = function(config, status) {
                                 fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
                             }
                             if(config.blast_opts) {
-                                var quoted_opts = config.blast_opts.replace(/"/g, '\\"');
-                                fs.writeSync(fd, "export blast_opts=\""+quoted_opts+"\"\n");
+                                //why using array? see http://stackoverflow.com/questions/29973094/how-can-i-pass-a-quoted-string-as-a-single-argument-via-bash-variable
+                                fs.writeSync(fd, "export blast_opts=("+config.blast_opts+")\n");
                             }
                             fs.close(fd);
                             next();
@@ -627,8 +632,7 @@ module.exports.run = function(config, status) {
                                 fs.writeSync(fd, "export blast_dbsize=\"-dbsize "+config.dbinfo.length+"\"\n");
                             }
                             if(config.blast_opts) {
-                                var quoted_opts = config.blast_opts.replace(/"/g, '\\"');
-                                fs.writeSync(fd, "export blast_opts=\""+quoted_opts+"\"\n");
+                                fs.writeSync(fd, "export blast_opts=("+config.blast_opts+")\n");
                             }
                             fs.close(fd);
                             next();

@@ -135,8 +135,8 @@ echo "running blast"
 
 export BLASTDB=blastdb
 
-echo ./$blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
-time ./$blast -query $inputquery -db $dbname -out output $blast_opts $blast_dbsize
+echo ./$blast -query $inputquery -db $dbname -out output "${blast_opts[@]}" $blast_dbsize
+time ./$blast -query $inputquery -db $dbname -out output "${blast_opts[@]}" $blast_dbsize
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
