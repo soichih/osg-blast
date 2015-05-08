@@ -80,25 +80,29 @@ Step 2. Create config.json containing something like following (in the same dire
 }
 ```
 
-You need to use the project name that you have access on your submit host. "user" should usually match the local uid. "db" is the name of blast DB that you'd like to search against.  Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/dblist.json
+You need to use the project name that you have access on your submit host. "user" should usually match the local uid. "db" is the name of blast DB that you'd like to search against.  Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json
 
 * You need to update the project that you have access on your submit host! (IU-GALAXY for an example..)
 
-Step 3. Run osg-blast 
+Step 3. Run osg-blast
 
-Run osg-blast command on the directory where you have config.json
+> #samples your input query, and submit a small test jobs to figure out optimal number of query sizes to run for each osg jobs.
+> osg-blast-test --config config.json --out stats.json
 
-> osg-blast
+> #split your input query using stats.json generated above and store fasta files in input dir.
+> mkdir input
+> osg-blast-split --config config.json --stats stats.json --out input
 
-If you want your job to run after you log off from terminal, make sure to use nohup command.
+> #generate blast.dag and blast.condor file to submit your workflow
+> osg-blast-gendag --config config.json --stats stats.json
 
-> nohup osg-blast > stdout.txt 2> stderr.txt &
-> tail -f stdout.txt stderr.txt
+> #finally, submit the dag file 
+> condor_dag_submit blast.dag
 
-To abort your job, simply hit CTRL+C (or kill osg-blast process which will terminate all jobs submitted)
+> #wait for the dag to complete
+> condor_wait blast.dag.dagman.log
 
-osg-blast will first run submit some test jobs in order to collect some runtime information, then split the input queries and database (if user provided) into appropriate sizes, then start submitting jobs (there could be many thousands, depending on the size of your database, and input query, and your input parameters).
-
+You can put all these steps in a single bash script if you want to do all steps. 
 
 When your job completes, it will output something like following
 
@@ -176,7 +180,7 @@ publish your input database for you. Please contact your submit host administrat
 # Hosted Databases
 
 You can see a list of OASIS hosted blast databases here
-> http://xd-login.opensciencegrid.org/scratch/iugalaxy/dblist.json
+> http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json
 
 Anyone can use these databases. GOC periodically updates the content of the DB from the NCBI website. You can also provide your own database to run your job (contact hayashis@iu.edu for more info).
 

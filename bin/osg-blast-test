@@ -1,0 +1,339 @@
+#!/usr/bin/env node
+
+var version = require("../package").version;
+var fs = require('fs');
+var path = require('path');
+var async = require('async');
+var readblock = require('readblock');
+var rimraf = require('rimraf');
+var osg = require('osg');
+var which = require('which');
+var _ = require('underscore');
+var argv = require('optimist').argv;
+
+var common = require("../common");
+
+console.log("osg-blast-test version "+version);
+
+if(!argv.out) {
+    console.log("Please specify -out option to store test job result");
+    process.exit(1);
+}
+
+function runtests(config, fasta_blocks, cb) {
+    var workflow = new osg.Workflow({max_concurrent_submit: 4000}); //no way we will have 4000 test jobs.. but just in case
+    var results = []; //test results
+
+    function success(job, info) {
+        results.push(info); 
+        console.log(job.id+' test job successfully completed in '+info.walltime+'ms :: finished:'+results.length+'/'+fasta_blocks.length);
+        if(results.length == fasta_blocks.length) {
+            //all test completed
+            analyze_results();
+        }
+    }
+
+    function stoptest(err) {
+        workflow.remove();
+        cb(err);
+    }
+
+    function analyze_results() {
+        //console.log("test jobs walltimes(ms)");
+        //console.dir(results);
+
+        //calculate average time it took to run
+        var sum = results.reduce(function(psum,result) {return psum+result.walltime}, 0);
+        console.log("sum:"+sum);
+        console.log("size:"+results.length);
+        var average = sum / results.length; 
+        console.log("average job walltime(ms):"+average);
+
+        //compute standard deviation
+        var sumd = results.reduce(function(d, result) {
+            var diff = average - result.walltime;
+            return d+diff*diff;
+        }, 0);
+        var sdev = Math.sqrt(sumd/fasta_blocks.length);
+        console.log("standard deviation:"+sdev);
+
+        //calculate optimum query block size
+        //TODO - take sdev into consideration
+        var block_size = parseInt(config.target_job_duration / average * config.test_job_block_size);
+        if(block_size < 10) {
+            //prevent input query split too small.. (0 is definitely too small)
+            cb(new Error("computed blocksize:"+block_size+" is too small"));
+        } else {
+            console.log("computed block size:" + block_size);
+            cb(null, {block_size: block_size, data: results});
+        }
+    }
+
+    function resubmit(job) {
+        var fastas = job._fastas;
+        var part = job._part;
+
+        if(config.test_resubmits > 0) {
+            console.log(job.id+' re-submitting test job part:'+part);
+            submitjob(config, workflow, fastas, part, null, success, resubmit, stoptest);
+            config.test_resubmits--;
+        } else {
+            stoptest(new Error('Test job re-submited too many times.. aborting test. '));
+        }
+    }
+
+    //set signal trap before submitting anything
+    process.on('SIGINT', function(code) {
+        console.log("received SIGINT(ctrl+c) - requesting workflow stop");
+        workflow.remove(function(err) {
+            console.log("exising now");
+            process.exit(code);
+        });
+    });
+    process.on('SIGTERM', function(code) {
+        console.log("received SIGTERM(kill) - requesting workflow stop");
+        workflow.remove(function(err) {
+            console.log("exising now");
+            process.exit(code);
+        });
+    });
+
+    try {
+        //now submit
+        var part = 0;
+        async.whilst(
+            function() { return part<fasta_blocks.length; },
+            function(next_part) {
+                submitjob(config, workflow, fasta_blocks[part], part, next_part, success, resubmit, stoptest);
+                part++;
+            },
+            function() {
+                console.log("Submitted all "+part+" test jos");
+            }
+        );
+    } catch(err) {
+        workflow.remove();
+        cb(err);
+    }
+}
+
+function load_test_fasta(config, cb) {
+    var fasta_blocks = [];
+    var file = readblock.open(config.input);
+    var i = 0;
+    async.whilst(
+        function() { return i < config.test_job_num; },
+        function(next) {
+            i++;
+            common.readfastas(file, config.test_job_block_size, function(fastas) {
+                if(fastas.length > 0) {
+                    fasta_blocks.push(fastas);
+                }
+                next();
+            });
+        }, function(err) {cb(err, fasta_blocks);}
+    );
+}
+
+function submitjob(config, workflow, fastas, part, submitted, success, resubmit, failed) {
+
+    var env = common.construct_env(config);
+
+    //override some env for test run
+    var dbpart = part;
+    if(config.dbinfo.parts.length <= part) {
+        //use first db part if we don't have enough db parts
+        dbpart = 0;
+    }
+    env.dbname=config.dbinfo.parts[dbpart];
+    env.inputquery='test.fasta';
+    env.outputname = 'output.'+part;
+
+    var job = workflow.submit({
+        executable: __dirname+'/../blast.sh',
+        receive: ['output/'+env.outputname],
+        timeout: 40*60*1000, 
+        timeout_reason: "test job should timeout in 40 minutes", 
+
+        description: 'test blast job on dbpart:'+part+' with queries:'+fastas.length,
+        condor: config.condor,
+        env: env,
+
+        debug: config.debug,
+        tmpdir: config.tmpdir,
+
+        //use callback function to auto-generate rundir and let me put stuff to it
+        rundir: function(rundir, done_prepare) {
+            async.series([
+                //send blast binary to run
+                function(next) {
+                    which(config.blast, function(err, path) {
+                        if(err) {
+                            failed(new Error('FAILED', "can't find blast executable:"+config.blast));
+                            //oplog({job: job, part: part, msg: "can't find blast executable:"+config.blast});
+                        } else {
+                            //console.log("found path:"+path);
+                            //console.log("config.blast:"+config.blast);
+                            console.log("symlinking from "+path+" to "+rundir+'/'+config.blast);
+                            fs.symlink(path, rundir+'/'+config.blast, next);
+                        }
+                    });
+                },
+                //write out input query
+                function(next) {
+                    var data = "";
+                    fastas.forEach(function(fasta) {
+                        data+=fasta+"\n";
+                    });
+                    fs.writeFile(rundir+'/test.fasta', data, next);
+                }
+            ], function(err) {
+                done_prepare();
+            });
+        }
+    });
+
+    job.on('submit', function(info) {
+        job._fastas = fastas;
+        job._part = part;
+
+        console.log(job.id+" submitted test job part:"+part);
+        if(submitted) {
+            submitted();
+        }
+    });
+
+    job.on('submitfail', function(err) {
+        failed(new Error('job submission failed\n'+err));
+    });
+
+    job.on('execute', function(info) {
+        console.log(job.id+" :: job part:"+part+" executing");
+    });
+    job.on('q', function(info) {
+        console.log(job.id+" :: job part:"+part+" is running on "+job.resource_name);
+    });
+    job.on('imagesize', function(info) {
+        console.log(job.id+" :: job part:"+part+' running. current imagesize '+JSON.stringify(info));
+    });
+    job.on('exception', function(info) {
+        console.log(job.id+' :: job part:'+part+' threw exception on resouce:'+job.resource_name+' :: '+info.Message);
+    });
+    job.on('hold', function(info) {
+        console.dir(info);
+        fs.readFile(job.stdout, 'utf8', function (err,data) {
+            console.log(data);
+            fs.readFile(job.stderr, 'utf8', function (err,data) {
+                console.log(data);
+                failed(new Error('test:'+part+' held on '+job.resource_name+' .. aborting due to: ' + JSON.stringify(info)));
+                //oplog({job: job, part: part, msg: "test job held: " + info.msg, info: info.info});
+            });
+        });
+    });
+
+    job.on('evict', function(info) {
+        //I am not sure if I've ever seen this happen
+        console.log(job.id+' test:'+part+' evicted while running on '+job.resource_name);
+        console.dir(info);
+        //TODO - I believe evict events are followed by abort/terminate type event.. so I don't have to do anythig here?
+    });
+
+    job.on('abort', function(info) {
+        failed(new Error('test job aborted'));
+    });
+
+    job.on('terminate', function(info) {
+        var now = new Date();
+
+        if(info.ret == 0) {
+            /*
+            var out = fs.readFileSync(job.stdout, 'utf8');
+            console.log(out);
+            var err = fs.readFileSync(job.stderr, 'utf8');
+            console.log(err);
+            console.log("dumping "+job.rundir+" directory");
+            fs.readdir(job.rundir, function(err, files) {
+                console.dir(files);
+            */
+            if(argv.outdir) {
+                //copying file to rundir
+                fs.createReadStream(job.rundir+'/'+env.outputname).pipe(fs.createWriteStream(argv.outdir+'/'+env.outputname));
+            }
+            success(job, info);
+            //});
+        } else {
+            var out = fs.readFileSync(job.stdout, 'utf8');
+            var err = fs.readFileSync(job.stderr, 'utf8');
+            if(argv.outdir) {
+                fs.writeFileSync(argv.outdir+'/stdout.'+part+'.'+now.getTime(), out);
+                fs.writeFileSync(argv.outdir+'/stderr.'+part+'.'+now.getTime(), err);
+            }
+
+            if(info.ret > 0 && info.ret < 10) {
+                console.log(out);
+                console.log(err);
+                failed(new Error("test job permanently failed - aborting job"));
+            } else {
+                //let's always resubmit .. until retry count reaches
+                if(info.ret == 15) {
+                    //oplog({msg : "squid server mulfunctioning at site: "+job.resource_name});
+                }
+
+                console.log(job.id+' part:'+part+' temporarily failed (code '+info.ret+').. resubmitting');
+                resubmit(job);
+
+            }
+        }
+    });
+}
+
+//start out by loading config
+common.load_config(function(err, config) {
+    if(err) throw err;
+
+    //load some test specific config defaults
+    config.test_resubmits = 10;//max number of test job to resubmit (total)
+    config.test_job_num = config.test_job_num || 5; //number of test jobs to run
+    config.test_job_block_size = config.test_job_block_size || 32; //number of query to test for each test job
+    config.target_job_duration = 1000*60*90; //shoot for 90 minutes
+
+    //and other stuff..
+    var no_submit_requirements = "";
+    if(config.no_submit) {
+        config.no_submit.forEach(function(site) {
+            no_submit_requirements += "(GLIDEIN_ResourceName =!= \""+site+"\") && ";
+        });
+    }
+
+    //last minute overrides
+    config.condor = _.extend(config.condor, {
+        "+ProjectName": config.project,
+        "+PortalUser": config.user,
+        "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
+    });
+    //10G should be more than enough(??)
+    config.condor.Requirements = no_submit_requirements+
+                        "(TARGET.Disk >= 10*1024*1024) && "+ config.condor.Requirements;
+
+    //console.log("configuration");
+    //console.dir(config);
+
+    //then load array of sample fastas (for each test jobs)
+    load_test_fasta(config, function(err, fastas) {
+        if(err) throw err;
+
+        //run test
+        runtests(config, fastas, function(err, result) {
+            if(err) {
+                console.log("test job failed.. aborting workflow");
+                process.exit(1);
+            }
+            console.log("storing test result in "+argv.out);
+            console.dir(result);
+            fs.writeFileSync(argv.out, JSON.stringify(result));
+        });
+
+    });
+});
+
+

@@ -1,0 +1,53 @@
+#!/usr/bin/env node
+
+var version = require("../package").version;
+var fs = require('fs');
+var path = require('path');
+var async = require('async');
+var readblock = require('readblock');
+var rimraf = require('rimraf');
+var osg = require('osg');
+var which = require('which');
+var _ = require('underscore');
+var argv = require('optimist').argv;
+
+var common = require("../common");
+
+console.log("osg-blast-split version "+version);
+
+if(!argv.stats || !argv.outdir) {
+    console.log("wrong argument. it should look like $ osg-blast-split --stats stats.json --outdir inputs");
+    process.exit(1);
+}
+
+var stats = JSON.parse(fs.readFileSync(argv.stats, 'utf8'));
+
+common.load_config(function(err, config) {
+    if(err) throw err;
+    var file = readblock.open(config.input);
+    var block = 0;
+    async.whilst(
+        function() {return file.hasmore(); },
+        function(next) {
+            common.readfastas(file, stats.block_size, function(fastas) {
+                var data = "";
+                fastas.forEach(function(fasta) {
+                    data+=fasta+"\n";
+                });
+                fs.writeFile(argv.outdir+'/query.'+block+'.fa', data, function(err) {
+                    if(err) next(err) 
+                    else {
+                        block++;
+                        next();
+                    }
+                });
+            }); 
+        },
+        function(err) {
+            if(err) throw err;
+            console.log("done splitting "+config.input+" to "+block+" blocks");
+        }
+    );
+});
+
+

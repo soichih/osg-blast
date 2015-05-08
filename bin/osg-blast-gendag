@@ -1,0 +1,142 @@
+#!/usr/bin/env node
+
+var version = require("../package").version;
+var fs = require('fs');
+var path = require('path');
+var async = require('async');
+var readblock = require('readblock');
+var rimraf = require('rimraf');
+var osg = require('osg');
+var which = require('which');
+var _ = require('underscore');
+var argv = require('optimist').argv;
+
+var common = require("../common");
+
+console.log("osg-blast-gendag version "+version);
+
+if(!argv.input) {
+    console.log("wrong argument. it should look like $ osg-blast-gendag --input input");
+    process.exit(1);
+}
+
+function construct_submit(config, env) {
+    var env_str = "";
+    for(var key in env) {
+        var v = env[key];
+        if(v.replace) v = v.replace(/\"/g, "\"\"");
+        env_str += key+"="+v+" ";
+    }
+
+    //generate blast.condor submit file
+    var submit = "";
+    submit += "universe=vanilla\n"; 
+    submit += "executable=blast.sh\n";
+    submit += "notification=never\n";
+    submit += "should_transfer_files=YES\n";
+    submit += "when_to_transfer_output=ON_EXIT\n";
+    submit += "output=log/stdout.$(Cluster).$(dbname).q.$(Process).txt\n";
+    submit += "error=log/stderr.$(Cluster).$(dbname).q.$(Process).txt\n";
+    submit += "transfer_output_files=output\n";
+    submit += "transfer_input_files=blastn,input/query.$(Process).fa\n";
+    submit += "environment=\""+env_str+"\"\n";
+    submit += "+Description=\"blast job on $(dbname) with query.$(Process)\"\n";
+
+    //submit += "periodic_hold=(JobStatus == 1 && (CurrentTime - EnteredCurrentStatus) > 7200) || (JobStatus == 2 && (CurrentTime - EnteredCurrentStatus) > 2400)\n";
+    //submit += "periodic_hold_reason=\"test job should timeout in 40 minutes\"\n";
+
+    //keep resubmitting held jobs
+    //TODO - I need to terminate jobs with too many RetryCount(?), but I don't want DAG to terminate.. how can I do that?
+    //submit += "periodic_remove=(CurrentTime - EnteredCurrentStatus) > 14400\n"; //remove jobs that are in a queue for more than 4 hours
+    //submit += "PeriodicRelease=((JobStatus==5) && (CurentTime - EnteredCurrentStatus) > 30)\n"; //trying retry with dag
+
+    submit += "Requirements="+config.condor.Requirements+"\n";
+    submit += "+PortalUser=\""+config.user+"\"\n";
+    submit += "+ProjectName=\""+config.project+"\"\n";
+    submit += "request_memory=2000\n"; //2g
+    submit += "request_disk=10240000\n"; //10g
+    //submit += "log_xml=True\n";
+    return submit;
+}
+
+//TODO - does this support the user db? probably not..
+function construct_dag(config) {
+    var dag = "";    
+
+    //debug (limit to 2 dbs)
+    //config.dbinfo.parts = config.dbinfo.parts.splice(1,2);
+    
+    config.dbinfo.parts.forEach(function(part) {
+        dag += "JOB "+part+" blast.condor\n";
+        dag += "VARS "+part+" dbname=\""+part+"\"\n";
+        dag += "RETRY "+part+" 3\n";
+        dag += "\n";
+    }); 
+    return dag;
+}
+
+//start out by loading config
+common.load_config(function(err, config) {
+    if(err) throw err;
+
+    //find number of input files in input directory
+    var input_queries = []; 
+    fs.readdir(argv.input, function(err, files) {
+        if(err) throw err;
+        files.forEach(function(file) {
+            if(file.indexOf('query.') === 0) input_queries.push(file);
+        });
+
+        //set last minutes condor requirements
+        config.condor.Requirements = config.condor.Requirements || "";
+        if(config.no_submit) {
+            config.no_submit.forEach(function(site) {
+                if(config.condor.Requirements != "") config.condor.Requirements += " && ";
+                config.condor.Requirements += "(GLIDEIN_ResourceName =!= \""+site+"\")";
+            });
+        }
+
+        //store submit file
+        var env = common.construct_env(config);
+        var submit = construct_submit(config, env);
+        submit += "\nqueue "+input_queries.length+"\n";
+        if(config.debug) {
+            console.log("storing blast.condor");
+            console.log(submit);
+        }
+        fs.writeFileSync("blast.condor", submit);
+
+        //store dag
+        var dag = construct_dag(config);
+        if(config.debug) {
+            console.log("storing blast.dag");
+            console.log(dag);
+        }
+        fs.writeFileSync("blast.dag", dag);
+    });
+
+    /*
+    //then load array of sample fastas (for each test jobs)
+    load_test_fasta(config, function(err, fastas) {
+        if(err) throw err;
+        //console.dir(fastas);
+
+        //prepare output directory
+        //rimraf(config.rundir+'/test-output', function() {
+        fs.mkdir(config.rundir+'/test-output', function(err) {
+            if(err) throw err;
+            //run test
+            runtests(config, fastas, function(err, result) {
+                if(err) throw err;
+                console.log("storing test result in "+argv.out);
+                console.dir(result);
+                fs.writeFileSync(argv.out, JSON.stringify(result));
+            });
+            //});
+        });
+
+    });
+    */
+});
+
+

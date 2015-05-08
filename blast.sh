@@ -1,23 +1,25 @@
 #!/bin/bash
 
+###################################################################################################
+#
+# This script gets executed on each osg site to run blast
+#
+
 echo "hostname" `hostname`
 
-echo "OSG env"
-set | grep OSG
+#echo "OSG env"
+#set | grep OSG
 
-echo "sourcing params.sh";
-cat params.sh
-source ./params.sh
+#echo "sourcing params.sh";
+#cat params.sh
+#source ./params.sh
+env | sort
 
-echo "prevent condor to issue hold event before terminating with any error code"
-touch output
-
-#export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/rhel6/x86_64/ncbi-blast-2.2.29+/bin
-#export PATH=$PATH:/cvmfs/oasis.opensciencegrid.org/osg/projects/OSG-Staff/rhel6/x86_64/node-v0.10.25-linux-x64/bin
+#echo "prevent condor to issue hold event before terminating with any error code"
+#touch output
 
 #limit memory at 2G
-ulimit -v 2048000
-
+#ulimit -v 2048000 
 
 if [ $oasis_dbpath ]; then
     echo "using oasis db"
@@ -28,13 +30,6 @@ if [ $oasis_dbpath ]; then
         echo "can't access /cvmfs/oasis.opensciencegrid.org"
         exit 68
     fi
-
-    #echo "listing oasis projects avaialble"
-    #ls -lart /cvmfs/oasis.opensciencegrid.org
-    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects
-    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY
-    #echo "blastdb available in oasis"
-    #ls -lart /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb
 
     echo "listing $oasis_dbpath"
     ls -lart $oasis_dbpath
@@ -69,8 +64,6 @@ elif [ $irod_dbpath ]; then
     date +%c
     echo "copying $dbname.tar.gz from $irod_dbpath"
     
-    #/cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz
-    #new version of icp-osg that does retries
     /cvmfs/oasis.opensciencegrid.org/osg/projects/iRODS/noarch/client/v0.8/icp-osg $irod_dbpath/$dbname.tar.gz blastdb/$dbname.tar.gz 
 
     ret=$?
@@ -123,8 +116,8 @@ fi
 
 ls -lart blastdb
 
-echo "head of $inputquery"
-head -20 $inputquery
+#echo "head of $inputquery"
+#head -20 $inputquery
 
 echo "running blast"
 #-outfmt 5 : xml
@@ -134,9 +127,18 @@ echo "running blast"
 #-outfmt 11 : asn.1
 
 export BLASTDB=blastdb
+mkdir output
 
-echo ./$blast -query $inputquery -db $dbname -out output "${blast_opts[@]}" $blast_dbsize
-time ./$blast -query $inputquery -db $dbname -out output "${blast_opts[@]}" $blast_dbsize
+echo -n "./$blast -query $inputquery -db $dbname -out output/$outputname $blast_opts" > cmd.sh
+if [ $dbsize ]; then
+    echo -n " -dbsize $dbsize" >> cmd.sh
+fi
+
+echo "running"
+cat cmd.sh
+chmod +x cmd.sh
+
+./cmd.sh
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
@@ -246,5 +248,42 @@ esac
 # 17 - failed to untar irod tar.gz
 # 18 - failed to untar user tar.gz
 # >125 - blast executable signal
+
+#RETURN CODE ---------------------------------------------------------------
+#
+#0 - job completed successfully
+#
+#1 - 63 (job specific return codes)
+#    (common job specific return codes)
+#
+#    //1 - 9 usuallly indicates permanent error (should abort the workflow)
+#    1 - issue with input file (or blast db) (job will fail everywhere)
+#    2 - resource(memory?) error (job will fail everywhere)
+#    3 - parameter is wrong (or dbname is wrong)
+#    9 - unknown error from the executable
+#
+#    //10 - 19 usually indicates site error (should retry)
+#    10 - failed to load input (should retry)
+#    11 - produced invalid output (should retry)
+#    12 - executable missing or failed to run (should retry)
+#    13 - program crashed due to some kind of bug (ncbi c++ exception)
+#    14 - blast segfaulted
+#    15 - squid server not working (should report to GOC)
+#    16 - failed to download db
+#
+#64 - failed to download node/npm
+#65 - failed to install osg node package
+#66 - timeout (as specified in osg submit option.timeout)
+#67 - run.js failed to spawn requested executable (osg submit option.run)
+#68 - failed to access oasis
+#    
+#130 - sigint (ctrl+c - ed)
+#137 - sigkill (kill -9 <pid>)-ed)
+#147 - sigterm (normal kill <pid>)
+#
+
+#HOLD SUBCODE ---------------------------------------------------------------
+#
+#1 - timeout
 
 exit $blast_ret
