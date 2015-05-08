@@ -108,7 +108,7 @@ function runtests(config, fasta_blocks, cb) {
                 part++;
             },
             function() {
-                console.log("Submitted all "+part+" test jos");
+                console.log("Submitted all "+part+" test jobs");
             }
         );
     } catch(err) {
