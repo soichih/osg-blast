@@ -6,4 +6,15 @@ osg-blast-test --config config.json --out stats.json --outdir test-output
 
 echo "Splitting input file"
 mkdir -p input
-bin/osg-blast-split --config config.json --stats stats.json --outdir input
+osg-blast-split --config config.json --stats stats.json --outdir input
+
+echo "Generating condor dag"
+osg-blast-gendag --config config.json --input input
+
+echo "Submitting dag"
+mkdir -p log
+mkdir -p output
+condor_submit_dag blast.dag
+
+echo "waiting for workflow to finish"
+condor_wait blast.dag.dagman.log

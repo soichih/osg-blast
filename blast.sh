@@ -41,8 +41,11 @@ if [ $oasis_dbpath ]; then
 
     #create subdirectory so that condor won't try to ship it back to submit host accidentally
     mkdir blastdb
+    date +%c
     echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
     (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
+    echo "done"
+    date +%c
 
     if [ $? -ne 0 ]; then 
         echo "failed to untar $oasis_dbpath/$dbname.tar.gz - let's retry.."
@@ -134,11 +137,10 @@ if [ $dbsize ]; then
     echo -n " -dbsize $dbsize" >> cmd.sh
 fi
 
-echo "running"
+echo "running blast"
 cat cmd.sh
 chmod +x cmd.sh
-
-./cmd.sh
+time ./cmd.sh
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"

@@ -43,7 +43,12 @@ function runtests(config, fasta_blocks, cb) {
         //console.dir(results);
 
         //calculate average time it took to run
-        var sum = results.reduce(function(psum,result) {return psum+result.walltime}, 0);
+        var sum = results.reduce(function(psum,result) {
+            var blasttime = result.walltime - 1000*30; //let's assume it takes about 30 seconds to load db part
+            if(blasttime < 0) blasttime = 0; //kiss..
+
+            return psum + result.walltime;
+        }, 0);
         console.log("sum:"+sum);
         console.log("size:"+results.length);
         var average = sum / results.length; 
@@ -244,31 +249,20 @@ function submitjob(config, workflow, fastas, part, submitted, success, resubmit,
 
     job.on('terminate', function(info) {
         var now = new Date();
+        var out = fs.readFileSync(job.stdout, 'utf8');
+        var err = fs.readFileSync(job.stderr, 'utf8');
+        if(argv.outdir) {
+            fs.writeFileSync(argv.outdir+'/stdout.'+part+'.'+now.getTime(), out);
+            fs.writeFileSync(argv.outdir+'/stderr.'+part+'.'+now.getTime(), err);
+        }
 
         if(info.ret == 0) {
-            /*
-            var out = fs.readFileSync(job.stdout, 'utf8');
-            console.log(out);
-            var err = fs.readFileSync(job.stderr, 'utf8');
-            console.log(err);
-            console.log("dumping "+job.rundir+" directory");
-            fs.readdir(job.rundir, function(err, files) {
-                console.dir(files);
-            */
             if(argv.outdir) {
-                //copying file to rundir
+                //copying output file to rundir
                 fs.createReadStream(job.rundir+'/'+env.outputname).pipe(fs.createWriteStream(argv.outdir+'/'+env.outputname));
             }
             success(job, info);
-            //});
         } else {
-            var out = fs.readFileSync(job.stdout, 'utf8');
-            var err = fs.readFileSync(job.stderr, 'utf8');
-            if(argv.outdir) {
-                fs.writeFileSync(argv.outdir+'/stdout.'+part+'.'+now.getTime(), out);
-                fs.writeFileSync(argv.outdir+'/stderr.'+part+'.'+now.getTime(), err);
-            }
-
             if(info.ret > 0 && info.ret < 10) {
                 console.log(out);
                 console.log(err);
@@ -278,10 +272,8 @@ function submitjob(config, workflow, fastas, part, submitted, success, resubmit,
                 if(info.ret == 15) {
                     //oplog({msg : "squid server mulfunctioning at site: "+job.resource_name});
                 }
-
                 console.log(job.id+' part:'+part+' temporarily failed (code '+info.ret+').. resubmitting');
                 resubmit(job);
-
             }
         }
     });

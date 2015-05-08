@@ -28,19 +28,21 @@ function construct_submit(config, env) {
         env_str += key+"="+v+" ";
     }
 
+    var blastpath = which.sync(config.blast);
+
     //generate blast.condor submit file
     var submit = "";
     submit += "universe=vanilla\n"; 
-    submit += "executable=blast.sh\n";
+    submit += "executable="+__dirname+"/../blast.sh\n";
     submit += "notification=never\n";
     submit += "should_transfer_files=YES\n";
     submit += "when_to_transfer_output=ON_EXIT\n";
-    submit += "output=log/stdout.$(Cluster).$(dbname).q.$(Process).txt\n";
-    submit += "error=log/stderr.$(Cluster).$(dbname).q.$(Process).txt\n";
+    submit += "output=log/stdout.$(dbname).q.$(process).$(cluster).txt\n";
+    submit += "error=log/stderr.$(dbname).q.$(process).$(cluster).txt\n";
     submit += "transfer_output_files=output\n";
-    submit += "transfer_input_files=blastn,input/query.$(Process).fa\n";
+    submit += "transfer_input_files="+blastpath+",input/query.$(process).fa\n";
     submit += "environment=\""+env_str+"\"\n";
-    submit += "+Description=\"blast job on $(dbname) with query.$(Process)\"\n";
+    submit += "+Description=\"blast job on $(dbname) with query.$(process)\"\n";
 
     //submit += "periodic_hold=(JobStatus == 1 && (CurrentTime - EnteredCurrentStatus) > 7200) || (JobStatus == 2 && (CurrentTime - EnteredCurrentStatus) > 2400)\n";
     //submit += "periodic_hold_reason=\"test job should timeout in 40 minutes\"\n";
@@ -54,7 +56,7 @@ function construct_submit(config, env) {
     submit += "+PortalUser=\""+config.user+"\"\n";
     submit += "+ProjectName=\""+config.project+"\"\n";
     submit += "request_memory=2000\n"; //2g
-    submit += "request_disk=10240000\n"; //10g
+    submit += "request_disk=5240000\n"; //5g should be more than enough
     //submit += "log_xml=True\n";
     return submit;
 }
@@ -114,29 +116,6 @@ common.load_config(function(err, config) {
         }
         fs.writeFileSync("blast.dag", dag);
     });
-
-    /*
-    //then load array of sample fastas (for each test jobs)
-    load_test_fasta(config, function(err, fastas) {
-        if(err) throw err;
-        //console.dir(fastas);
-
-        //prepare output directory
-        //rimraf(config.rundir+'/test-output', function() {
-        fs.mkdir(config.rundir+'/test-output', function(err) {
-            if(err) throw err;
-            //run test
-            runtests(config, fastas, function(err, result) {
-                if(err) throw err;
-                console.log("storing test result in "+argv.out);
-                console.dir(result);
-                fs.writeFileSync(argv.out, JSON.stringify(result));
-            });
-            //});
-        });
-
-    });
-    */
 });
 
 
