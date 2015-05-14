@@ -80,13 +80,14 @@ Step 2. Create config.json containing something like following (in the same dire
 }
 ```
 
-You need to use the project name that you have access on your submit host. "user" should usually match the local uid. "db" is the name of blast DB that you'd like to search against. (Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json)
+You need to use the project name that you have access on your submit host (instead of IU-GALAXY). "user" should usually match your local uid - it's just
+used to tell xd-login to not wait on other user's jobs if submitted from IU GALAXY. "db" is the name of blast DB that you'd like to search against (Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json)
 
-* You need to update the project that you have access on your submit host! (IU-GALAXY for an example..)
+(See below for a bit more info on hosted DB)
 
 Step 3. Run osg-blast-test
 
-This application your input query, and submit a small test jobs to figure out optimal number of query sizes to run for each osg jobs.
+This application samples your input query, and submit a small test jobs to figure out the optimal number of query sizes to run for each jobs.
 
 > osg-blast-test --config config.json --out stats.json
 
@@ -101,11 +102,14 @@ Step 5.  Generate blast.dag and blast.condor file to submit your workflow
 
 Step 6. Finally, submit the dag file to run your workflow!
 
+> mkdir log
+> mkdir output
 > condor_dag_submit blast.dag
 
 Step 7. Wait for the dag to complete
 
-This is mainly for cases where you are running osg-blast via Galaxy, or other wrapper systems.
+This is mainly for cases where you are running osg-blast from Galaxy, or other wrapper systems that needs to "wait" until the job is complete (it could take
+days!)
 
 > condor_wait blast.dag.dagman.log
 
