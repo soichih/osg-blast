@@ -80,109 +80,60 @@ Step 2. Create config.json containing something like following (in the same dire
 }
 ```
 
-You need to use the project name that you have access on your submit host. "user" should usually match the local uid. "db" is the name of blast DB that you'd like to search against.  Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json
+You need to use the project name that you have access on your submit host. "user" should usually match the local uid. "db" is the name of blast DB that you'd like to search against. (Please see under /cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb for currently available databases. Or you can see http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json)
 
 * You need to update the project that you have access on your submit host! (IU-GALAXY for an example..)
 
-Step 3. Run osg-blast
+Step 3. Run osg-blast-test
 
-> #samples your input query, and submit a small test jobs to figure out optimal number of query sizes to run for each osg jobs.
+This application your input query, and submit a small test jobs to figure out optimal number of query sizes to run for each osg jobs.
+
 > osg-blast-test --config config.json --out stats.json
 
-> #split your input query using stats.json generated above and store fasta files in input dir.
+Step 4.  Split your input query using stats.json 
+
 > mkdir input
 > osg-blast-split --config config.json --stats stats.json --out input
 
-> #generate blast.dag and blast.condor file to submit your workflow
+Step 5.  Generate blast.dag and blast.condor file to submit your workflow
+
 > osg-blast-gendag --config config.json --stats stats.json
 
-> #finally, submit the dag file 
+Step 6. Finally, submit the dag file to run your workflow!
+
 > condor_dag_submit blast.dag
 
-> #wait for the dag to complete
+Step 7. Wait for the dag to complete
+
+This is mainly for cases where you are running osg-blast via Galaxy, or other wrapper systems.
+
 > condor_wait blast.dag.dagman.log
 
-You can put all these steps in a single bash script if you want to do all steps. 
+Step 8. Merge outputs
 
-When your job completes, it will output something like following
+Once osg-blast finishes, you are left with hundreds of output files. For outputs from the same query, you will need to sort
+the result by e-value, and merge them into a single file. For csv output, you can simply use sort command. For XML output, 
+it's a bit more complicated. osg-blast-merge9 script in /bin does this for you, but I haven't ported it to run on osg-blast v3 
+(stay tuned!)
 
-```
-RUNNING :: Tue Apr 21 2015 12:31:37 GMT+0000 (UTC) :: 211311.0 successfully completed in 248390ms :: finished:17/17
-COMPLETED :: Tue Apr 21 2015 12:31:37 GMT+0000 (UTC) :: all jobs successfully completed. total jobs:17
-COMPLETED :: Tue Apr 21 2015 12:31:37 GMT+0000 (UTC) :: Workflow statistics:
----------------------------------------------------------------------------
-Workflow Statistics
----------------------------------------------------------------------------
-MIT_CMS avg walltime per job(ms):69585
-success:4
+osg-blast-gendag creates another condor submit file (blast.merge6.condor) which runs the csv output file sorting / merging
+process using the submit host's local job slot. This hasn't been tested outside of xd-login.opensciencegrid.org, so I won't 
+document here (yet), but please feel free to take a look.
 
-Tusker avg walltime per job(ms):187742
-success:11
 
-Purdue-Hadoop avg walltime per job(ms):81216
-success:1
-
-UCSDT2 avg walltime per job(ms):91098
-success:2
-
----------------------------------------------------------------------------
-Total Walltime(ms) of workflow:342450
-Total Jobs:18
----------------------------------------------------------------------------
-
-workflow completed successfully
-
-```
-
-Step 4. Merge output
-
-osg-blast will generate output files for each jobs under ./output directory. You can use osg-blast's merge script to merge all of your output into a single output file.
-
-```
-$ cd output
-$ osg-blast-merge6
-merging dbparts
-merging query block 0
-output.qb_0.db_0   output.qb_0.db_11  output.qb_0.db_14  output.qb_0.db_2  output.qb_0.db_5  output.qb_0.db_8
-output.qb_0.db_1   output.qb_0.db_12  output.qb_0.db_15  output.qb_0.db_3  output.qb_0.db_6  output.qb_0.db_9
-output.qb_0.db_10  output.qb_0.db_13  output.qb_0.db_16  output.qb_0.db_4  output.qb_0.db_7
-merging query blocks
-```
-
-osg-blast-merge6 is to merge outputs in tabular format (-outfmt 6). For XML output  (-outfmt 5), use osg-blast-merge5. XML mering requires substantial amount of memory (if you are merging 100s of GB of data), so please don't merge them on your submit host.
-
-Following is the output from the sample input file above
-
-```
-[hayashis@login01 output]$ cat merged
-comp129_c0_seq1 gi|470487826|ref|XM_004344685.1|        98.44   128     2       0       1       128     128     1       7e-56     226
-```
-
-It looks like there was only 1 match for the 3rd input sequence "comp129_c0_seq1". (TODO I need to make the sample input more interesting..sorry!)
-
-# Details
-
-osg-blast splits your input queries, and use DB that is split into mutiple chunks (1G compressed each), and submits
-all jobs on local queue in the order of required DB part number (to maximize squid hits). Any failed job will be
-analyzed to see if it can be re-submitted elsewhere, and if not, then abort the entire workflow.
-
-Every blast execution is unique, and amount of memory / cpu resources required to run blast depends on the type
-of input query, db, and input parameters, etc.. so osg-blast first submits some test jobs in order to determine 
-how large the each input block should be. 
+# Hosted Databases
 
 osg-blast uses some hosted DB (such as those DB published by NCBI) so you don't have to have them available with 
 your job. osg-blast will use ones published via OSG's OASIS.
-
-If you want to provide your own database, you can do so, but you need to make it available via some webserver where
-each job can download from (through squid). Most submit host (xd-login, osg-connect, etc... ) provides you some mechanism to 
-publish your input database for you. Please contact your submit host administrator.
-
-# Hosted Databases
 
 You can see a list of OASIS hosted blast databases here
 > http://xd-login.opensciencegrid.org/scratch/iugalaxy/blastdb/dblist.json
 
 Anyone can use these databases. GOC periodically updates the content of the DB from the NCBI website. You can also provide your own database to run your job (contact hayashis@iu.edu for more info).
+
+If you want to provide your own database, you can do so, but you need to make it available via some webserver (or any CDN) where
+each job can download the database part from. Most submit host (xd-login, osg-connect, etc... ) provides you some mechanism to 
+publish your input database for you. Please contact your submit host administrator.
 
 # Updating Blast DB on OASIS
 

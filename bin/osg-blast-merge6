@@ -1,20 +1,38 @@
 #!/bin/bash
 
 #this script merged output generated with -outfmt 6
+# sample output file name: nr.09.q.613
 
-echo "merging dbparts"
+function globexists {
+  test -e "$1" -o -L "$1"
+}
+
 query_block=0
-while [ -f output.qb_$query_block.db_0 ]
-do
-    echo "merging query block $query_block"
-    ls output.qb_$query_block.*
-    sort output.qb_$query_block.* > merged.qb_$query_block
-    query_block=$((query_block+1))
+#while [ -f output.qb_$query_block.db_0 ]
+while true; do
+    #[ $(find . -name '*.q.$query_block') ]
+    if test -n "$(shopt -s nullglob; echo *.q.$query_block.gz)"
+    then
+        echo "unzip query block $query_block"
+        ls *.q.$query_block.gz
+        gunzip *.q.$query_block.gz
+
+        echo "sorting query block $query_block"
+        sort *.q.$query_block | gzip -c > merged.q.$query_block.gz
+
+        echo "gziping back query block $query_block"
+        gzip *.q.$query_block
+        query_block=$((query_block+1))
+    else
+        echo "merging complete"
+        exit 0
+    fi
 done
 
-echo "merging query blocks"
-#sort merged.qb_* > merged
-cat merged.qb_* > merged
+echo "can't concatenate.."
+exit 1
+#echo "concatenating query blocks"
+#cat merged.q.* > merged
 
-echo "removing temp files"
-rm merged.qb_*
+#echo "removing temp files"
+#rm merged.q.*

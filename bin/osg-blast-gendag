@@ -16,11 +16,11 @@ var common = require("../common");
 console.log("osg-blast-gendag version "+version);
 
 if(!argv.input) {
-    console.log("wrong argument. it should look like $ osg-blast-gendag --input input");
+    console.log("Please specify --input <input directory>");
     process.exit(1);
 }
 
-function construct_submit(config, env) {
+function construct_submit(config, env, query_blocks) {
     var env_str = "";
     for(var key in env) {
         var v = env[key];
@@ -39,18 +39,21 @@ function construct_submit(config, env) {
     submit += "when_to_transfer_output=ON_EXIT\n";
     submit += "output=log/stdout.$(dbname).q.$(process).$(cluster).txt\n";
     submit += "error=log/stderr.$(dbname).q.$(process).$(cluster).txt\n";
-    submit += "transfer_output_files=output\n";
-    submit += "transfer_input_files="+blastpath+",input/query.$(process).fa\n";
+    submit += "transfer_input_files="+blastpath+","+argv.input+"/query.$(process).fa\n";
+    submit += "transfer_output_files="+argv.outdir+"\n";
     submit += "environment=\""+env_str+"\"\n";
     submit += "+Description=\"blast job on $(dbname) with query.$(process)\"\n";
 
     //submit += "periodic_hold=(JobStatus == 1 && (CurrentTime - EnteredCurrentStatus) > 7200) || (JobStatus == 2 && (CurrentTime - EnteredCurrentStatus) > 2400)\n";
     //submit += "periodic_hold_reason=\"test job should timeout in 40 minutes\"\n";
 
-    //keep resubmitting held jobs
-    //TODO - I need to terminate jobs with too many RetryCount(?), but I don't want DAG to terminate.. how can I do that?
-    //submit += "periodic_remove=(CurrentTime - EnteredCurrentStatus) > 14400\n"; //remove jobs that are in a queue for more than 4 hours
-    //submit += "PeriodicRelease=((JobStatus==5) && (CurentTime - EnteredCurrentStatus) > 30)\n"; //trying retry with dag
+    //automatically release held jobs if it wasn't held by user 
+    //https://twiki.grid.iu.edu/bin/view/Documentation/CondorGToGlidein
+    //for HoldReasonCode, see http://research.cs.wisc.edu/htcondor/manual/v7.8/11_Appendix_A.html
+    submit += "PeriodicRelease = ((CurrentTime - EnteredCurrentStatus) > 60) && (HoldReasonCode =!= 1) && (NumJobStarts <= 10) \n";
+
+    //TODO I don't want DAG to terminate.. how can I do that?
+    submit += "periodic_remove = (NumJobStarts > 10) \n"; 
 
     submit += "Requirements="+config.condor.Requirements+"\n";
     submit += "+PortalUser=\""+config.user+"\"\n";
@@ -58,6 +61,50 @@ function construct_submit(config, env) {
     submit += "request_memory=2000\n"; //2g
     submit += "request_disk=5240000\n"; //5g should be more than enough
     //submit += "log_xml=True\n";
+
+    submit += "\nqueue "+query_blocks+"\n";
+    return submit;
+}
+
+function construct_submit_merge6(config, query_blocks) {
+
+    var blastpath = which.sync(config.blast);
+
+    var gzfiles = [];
+    config.dbinfo.parts.forEach(function(part) {
+        gzfiles.push(argv.outdir+'/'+part+'.q.$(process).gz');
+    });
+
+    var submit = "";
+    submit += "universe=vanilla\n"; 
+    submit += "executable="+__dirname+"/../merge6.sh\n";
+    submit += "notification=never\n";
+    submit += "should_transfer_files=YES\n";
+    submit += "when_to_transfer_output=ON_EXIT\n";
+    submit += "log=merge6.log\n";
+    submit += "output=log/stdout.merge6.q.$(process).$(cluster).txt\n";
+    submit += "error=log/stderr.merge6.q.$(process).$(cluster).txt\n";
+    submit += "environment=\"outdir="+argv.outdir+" query_block=$(process)\"\n";
+    submit += "transfer_input_files="+gzfiles.join(',')+'\n';
+    submit += "transfer_output_files="+argv.outdir+"\n";
+    submit += "+Description=\"merging blast output (format 6:csv) q.$(process)\"\n";
+
+    //automatically release held jobs if it wasn't held by user 
+    //https://twiki.grid.iu.edu/bin/view/Documentation/CondorGToGlidein
+    //for HoldReasonCode, see http://research.cs.wisc.edu/htcondor/manual/v7.8/11_Appendix_A.html
+    submit += "PeriodicRelease = ((CurrentTime - EnteredCurrentStatus) > 60) && (HoldReasonCode =!= 1) && (NumJobStarts <= 3) \n";
+    submit += "periodic_remove = (NumJobStarts > 3) \n"; 
+
+    //Mat's trick to run the job on local job slots
+    submit += "requirements = FileSystemDomain =?= \"xd-login.opensciencegrid.org\"\n";
+    submit += "+RunOnSubmitNode = True\n";
+
+    //do I need this if I am running it locally?
+    submit += "+PortalUser=\""+config.user+"\"\n";
+    submit += "+ProjectName=\""+config.project+"\"\n";
+
+    submit += "\nqueue "+query_blocks+"\n";
+
     return submit;
 }
 
@@ -71,7 +118,12 @@ function construct_dag(config) {
     config.dbinfo.parts.forEach(function(part) {
         dag += "JOB "+part+" blast.condor\n";
         dag += "VARS "+part+" dbname=\""+part+"\"\n";
-        dag += "RETRY "+part+" 3\n";
+
+        //RETRY retires entire db block - even if only 1 query block fails. 
+        //we have periodicrelease to retry each query block, and retry via dag just resubmits the entnre db block
+        //what we really need is to keep other db block running if 1 node fails, but how?
+        dag += "RETRY "+part+" 3\n"; 
+
         dag += "\n";
     }); 
     return dag;
@@ -88,6 +140,7 @@ common.load_config(function(err, config) {
         files.forEach(function(file) {
             if(file.indexOf('query.') === 0) input_queries.push(file);
         });
+        var query_blocks = input_queries.length;
 
         //set last minutes condor requirements
         config.condor.Requirements = config.condor.Requirements || "";
@@ -100,13 +153,16 @@ common.load_config(function(err, config) {
 
         //store submit file
         var env = common.construct_env(config);
-        var submit = construct_submit(config, env);
-        submit += "\nqueue "+input_queries.length+"\n";
+        var submit = construct_submit(config, env, query_blocks);
         if(config.debug) {
             console.log("storing blast.condor");
             console.log(submit);
         }
         fs.writeFileSync("blast.condor", submit);
+
+        //store merge6 submit file
+        var submit_m6 = construct_submit_merge6(config, query_blocks);
+        fs.writeFileSync("blast.merge6.condor", submit_m6);
 
         //store dag
         var dag = construct_dag(config);

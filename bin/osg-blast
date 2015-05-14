@@ -1,15 +1,35 @@
 #!/bin/bash
 
+if [ -d input ]; then
+    echo "input directory already exists. please remove before running"
+    exit 1
+fi
+
+#TODO - prevent job from running if there is another one already running?
+
+
 echo "Running Test"
 mkdir -p test-output
 osg-blast-test --config config.json --out stats.json --outdir test-output
+if [ $? -ne 0 ]; then
+    echo "test failed"
+    exit 1
+fi
 
 echo "Splitting input file"
 mkdir -p input
 osg-blast-split --config config.json --stats stats.json --outdir input
+if [ $? -ne 0 ]; then
+    echo "split failed"
+    exit 1
+fi
 
 echo "Generating condor dag"
-osg-blast-gendag --config config.json --input input
+osg-blast-gendag --config config.json --input input --outdir output
+if [ $? -ne 0 ]; then
+    echo "failed to generate condor dag"
+    exit 1
+fi
 
 echo "Submitting dag"
 mkdir -p log
@@ -17,4 +37,21 @@ mkdir -p output
 condor_submit_dag blast.dag
 
 echo "waiting for workflow to finish"
+sleep 10 #is 10 seconds enough?
 condor_wait blast.dag.dagman.log
+if [ $? -ne 0 ]; then
+    echo "workflow failed"
+    exit 1
+fi
+
+echo "checking for output"
+osg-blast-checkoutput --config config.json --input input --outdir output
+if [ $? -ne 0 ]; then
+    echo "incomplete output.. workflow failed with pertial output"
+    exit 1
+fi
+
+echo "TODO - run merge step"
+
+
+

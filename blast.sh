@@ -5,21 +5,8 @@
 # This script gets executed on each osg site to run blast
 #
 
-echo "hostname" `hostname`
-
-#echo "OSG env"
-#set | grep OSG
-
-#echo "sourcing params.sh";
-#cat params.sh
-#source ./params.sh
+echo "running on hostname:" `hostname`
 env | sort
-
-#echo "prevent condor to issue hold event before terminating with any error code"
-#touch output
-
-#limit memory at 2G
-#ulimit -v 2048000 
 
 if [ $oasis_dbpath ]; then
     echo "using oasis db"
@@ -130,9 +117,9 @@ echo "running blast"
 #-outfmt 11 : asn.1
 
 export BLASTDB=blastdb
-mkdir output
+mkdir $outdir
 
-echo -n "./$blast -query $inputquery -db $dbname -out output/$outputname $blast_opts" > cmd.sh
+echo -n "./$blast -query $inputquery -db $dbname -out $outdir/$outputname $blast_opts" > cmd.sh
 if [ $dbsize ]; then
     echo -n " -dbsize $dbsize" >> cmd.sh
 fi
@@ -149,6 +136,9 @@ ls -la
 #report return code
 case $blast_ret in
 0)
+    echo "zipping output"
+    gzip $outdir/$outputname
+
     #echo "validating output"
     #xmllint --noout --stream output
     #if [ $? -ne 0 ]; then

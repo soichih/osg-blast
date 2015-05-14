@@ -25,7 +25,7 @@ function readfastas(file, num, cb) {
 function load_config(cb) {
     var config_path;
     if (!argv.config) {
-        console.log("please specify -config for config.json path");
+        console.log("please specify --config for config.json path");
         process.exit(1);
     }
     config_path = path.resolve(argv.config)
@@ -59,7 +59,7 @@ function load_config(cb) {
     if(dbtokens[0] == "oasis") {
         config.condor.Requirements = "(TARGET.HAS_CVMFS_oasis_opensciencegrid_org =?= True) && "+config.condor.Requirements;
         config.condor.Requirements = "(TARGET.CVMFS_oasis_opensciencegrid_org_REVISION >= "+config.oasis_min_revision+") && "+config.condor.Requirements;
-        console.log("processing oasis dbinfo");
+        //console.log("processing oasis dbinfo");
         
         //TODO - validate dbtokens[1] (don't allow path like "../../../../etc/passwd"
         var oasis_dbpath = "/cvmfs/oasis.opensciencegrid.org/osg/projects/IU-GALAXY/blastdb/"+dbtokens[1];
@@ -182,6 +182,10 @@ function load_db_info(data) {
 
 function construct_env(config) {
     var env = {};
+    if (!argv.outdir) {
+        console.log("please specify --outdir for output directory");
+        process.exit(1);
+    }
     if(config._oasis_dbpath) {
         env.oasis_dbpath=config._oasis_dbpath;
     }
@@ -192,6 +196,7 @@ function construct_env(config) {
         env.user_dbpath=config._user_dbpath;
     }
     env.inputquery = 'query.$(process).fa';
+    env.outdir = argv.outdir;
     env.outputname = '$(dbname).q.$(process)';
     env.process = '$(Process)'; //only test uses this, but why not set this here?
     env.blast = config.blast;
@@ -201,8 +206,6 @@ function construct_env(config) {
         env.dbsize = config.dbinfo.length;
     }
 
-    //env.cmd='\'./'+config.blast+' -query $inputquery -db $dbname -out output/$outputname '+config.blast_opts;
-    //env.cmd+='\'';
 
     return env;
 }

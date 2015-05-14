@@ -44,7 +44,8 @@ function runtests(config, fasta_blocks, cb) {
 
         //calculate average time it took to run
         var sum = results.reduce(function(psum,result) {
-            var blasttime = result.walltime - 1000*30; //let's assume it takes about 30 seconds to load db part
+            //let's assume it takes some amount of time to load db part on average (and other overhead)
+            var blasttime = result.walltime - 1000*25; 
             if(blasttime < 0) blasttime = 0; //kiss..
 
             return psum + result.walltime;
@@ -156,7 +157,7 @@ function submitjob(config, workflow, fastas, part, submitted, success, resubmit,
 
     var job = workflow.submit({
         executable: __dirname+'/../blast.sh',
-        receive: ['output/'+env.outputname],
+        receive: [argv.outdir+'/'+env.outputname+'.gz'],
         timeout: 40*60*1000, 
         timeout_reason: "test job should timeout in 40 minutes", 
 
@@ -257,10 +258,8 @@ function submitjob(config, workflow, fastas, part, submitted, success, resubmit,
         }
 
         if(info.ret == 0) {
-            if(argv.outdir) {
-                //copying output file to rundir
-                fs.createReadStream(job.rundir+'/'+env.outputname).pipe(fs.createWriteStream(argv.outdir+'/'+env.outputname));
-            }
+            //copying output file to rundir
+            fs.createReadStream(job.rundir+'/'+env.outputname+'.gz').pipe(fs.createWriteStream(argv.outdir+'/'+env.outputname+'.gz'));
             success(job, info);
         } else {
             if(info.ret > 0 && info.ret < 10) {
