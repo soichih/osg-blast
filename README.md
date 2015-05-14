@@ -3,7 +3,7 @@
 ncbi-blast workflow submission script
 
 osg-blast submits a workflow to run blast search on a large input queries against a large blast database. 
-osg-blast is intended to run on Open Science Grid, and on a glidein enabled submit host (such as osg-xsede or OSGconnect).
+osg-blast is intended to run on Open Science Grid, and on a glidein enabled submit host (such as xd-login.opensciencegrid.org or login.osgconnect.net).
 
 # Installing blast from ncbi
 
@@ -74,7 +74,7 @@ Step 2. Create config.json containing something like following (in the same dire
     "project": "IU-GALAXY",
     "user": "hayashis",
     "input": "input.fasta",
-    "db": "oasis:nt.1-22-2014",
+    "db": "oasis:nt.2015-04-27",
     "blast": "blastn",
     "blast_opts": "-evalue 0.001 -outfmt 6 -best_hit_score_edge 0.05 -best_hit_overhang 0.25 -perc_identity 98.0"
 }
