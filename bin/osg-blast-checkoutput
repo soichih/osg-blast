@@ -1,0 +1,61 @@
+#!/usr/bin/env node
+
+var version = require("../package").version;
+var fs = require('fs');
+var path = require('path');
+var async = require('async');
+var readblock = require('readblock');
+var rimraf = require('rimraf');
+var osg = require('osg');
+var which = require('which');
+var _ = require('underscore');
+var argv = require('optimist').argv;
+
+var common = require("../common");
+
+console.log("osg-blast-checkoutput version "+version);
+
+if(!argv.indir) {
+    console.log("wrong argument. it should look like $ osg-blast-checkoutput --indir (input directory)");
+    process.exit(1);
+}
+
+if(!argv.outdir) {
+    console.log("wrong argument. it should look like $ osg-blast-checkoutput --outdir (output directory)");
+    process.exit(1);
+}
+
+//start out by loading config
+common.load_config(function(err, config) {
+    if(err) throw err;
+
+    //find number of input files in input directory
+    var input_queries = []; 
+    fs.readdir(argv.indir, function(err, files) {
+        if(err) throw err;
+        files.forEach(function(file) {
+            if(file.indexOf('query.') === 0) input_queries.push(file);
+        });
+
+        //console.log("number of querries:"+input_queries.length);
+        //console.log("number of dbparts:"+config.dbinfo.parts.length);
+
+        var failed = false;
+
+        for(var qid = 0;qid < input_queries.length;qid++) {
+            config.dbinfo.parts.forEach(function(part) {
+                var output = argv.outdir+'/'+part+".q."+qid+'.gz';
+                if(!fs.existsSync(output)) {
+                    failed = true;
+                    console.log("MISSING:"+output);
+                }
+            });
+        }
+        if(failed) {
+            console.log("detected missing output");
+            process.exit(1);
+        }
+    });
+});
+
+
