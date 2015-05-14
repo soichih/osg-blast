@@ -1,4 +1,4 @@
-## OSG Blast (V2)
+## OSG Blast (V3)
 
 ncbi-blast workflow submission script
 
