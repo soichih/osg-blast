@@ -24,23 +24,23 @@ If you don't have sudo access, you can download & install nodejs on your home di
 
 Install osg-blast on your home directory
 
-> cd ~
-> npm install osg-blast
+    cd ~
+    npm install osg-blastnpm install osg-blast
 
 Add -g if you want to install it under /usr/bin (you need sudo access)
 
-> npm install osg-blast -g
+    npm install osg-blast -g
 
 If you install osg-blast on your home directory, add a path to osg-blast on your ~/.bashrc
 
-> export PATH=$PATH:~/node_modules/osg-blast/bin
+    export PATH=$PATH:~/node_modules/osg-blast/bin
 
 # Updating osg-blast
 
 To update osg-blast installation..
 
-> cd ~
-> npm update osg-blast
+    cd ~
+    npm update osg-blast
 
 # Running osg-blast
 
@@ -89,29 +89,29 @@ Step 3. Run osg-blast-test
 
 This application samples your input query, and submit a small test jobs to figure out the optimal number of query sizes to run for each jobs.
 
-> osg-blast-test --config config.json --out stats.json
+    osg-blast-test --config config.json --out stats.json
 
 Step 4.  Split your input query using stats.json 
 
-> mkdir input
-> osg-blast-split --config config.json --stats stats.json --out input
+    mkdir input
+    osg-blast-split --config config.json --stats stats.json --out input
 
 Step 5.  Generate blast.dag and blast.condor file to submit your workflow
 
-> osg-blast-gendag --config config.json --stats stats.json
+    osg-blast-gendag --config config.json --stats stats.json
 
 Step 6. Finally, submit the dag file to run your workflow!
 
-> mkdir log
-> mkdir output
-> condor_dag_submit blast.dag
+    mkdir log
+    mkdir output
+    condor_dag_submit blast.dag
 
 Step 7. Wait for the dag to complete
 
 This is mainly for cases where you are running osg-blast from Galaxy, or other wrapper systems that needs to "wait" until the job is complete (it could take
 days!)
 
-> condor_wait blast.dag.dagman.log
+    condor_wait blast.dag.dagman.log
 
 Step 8. Merge outputs
 
