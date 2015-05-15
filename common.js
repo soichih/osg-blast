@@ -2,6 +2,7 @@ var async = require('async');
 var path = require('path');
 var fs = require('fs');
 var argv = require('optimist').argv;
+var http = require('http');
 
 function readfastas(file, num, cb) {
     var fastas = [];
@@ -20,6 +21,22 @@ function readfastas(file, num, cb) {
             cb(fastas);
         }
     );
+}
+
+function http_get(url, next) {
+    http.get(url, function(res) {
+        if(res.statusCode == "200") {
+            var data = "";
+            res.on('data', function(chunk) {
+                data += chunk;
+            });
+            res.on('end', function() {
+                next(null, data);
+            });
+        } else {
+            next(res.statusCode);
+        }
+    });
 }
 
 function load_config(cb) {

@@ -297,8 +297,8 @@ common.load_config(function(err, config) {
     //last minute overrides
     config.condor = _.extend(config.condor, {
         "+ProjectName": config.project,
-        "+PortalUser": config.user,
-        "periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
+        "+PortalUser": config.user
+        //"periodic_remove": "(CurrentTime - EnteredCurrentStatus) > 14400", //remove jobs stuck for 4 hours
     });
     //10G should be more than enough(??)
     config.condor.Requirements = no_submit_requirements+
