@@ -1,6 +1,6 @@
 {
   "name": "osg-blast",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "blast submition scripts for open science grid",
   "bin": {
     "osg-blast-test": "./bin/osg-blast-test",
