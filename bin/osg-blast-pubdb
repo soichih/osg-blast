@@ -1,0 +1,52 @@
+#!/bin/bash
+
+#sample
+#user="hayashis"
+#query="input_queries/transdecoder.pep"
+#blast=blastp
+#blast_opts="-max_target_seqs 1 -outfmt 6"
+
+input=$1
+dbtype=$2 #nucl or prot
+outdir=$3
+
+echo "outdir:$outdir"
+
+if [ -d $outdir ]; then
+    echo "$outdir already exists.. skipping db generation"
+else
+    echo "running makeblastdb"
+    mkdir -p $outdir
+    makeblastdb -in $input -dbtype $dbtype -max_file_sz 209715200 -hash_index -parse_seqids -out $outdir/blastdb
+    if [ $? -ne 0 ]; then
+        echo "failed to run makeblastdb"
+        exit 1
+    fi
+
+    echo "recreating pal/nal file - makeblastdb doesn't output LENGTH"
+    blastdb_aliastool -dblist "`grep DBLIST $outdir/blastdb.pal | cut -d' ' -f2-`" -dbtype $dbtype -title 'osg-blast user db' -out $outdir/blastdb
+
+    echo "tarring"
+    (
+        cd $outdir
+        names=$(find -name "blastdb*" | grep -v *.pal | grep -v *.nal | xargs -n 1 sh -c 'echo ${0%.*}' | uniq)
+        for name in $names; do
+            echo tar -czf $name.tar.gz ${name}*
+            tar -czf $name.tar.gz ${name}*
+        done
+    )
+fi
+
+#echo "generating config.json"
+#dbpath="http://xd-login.opensciencegrid.org/scratch/`whoami`/userdb/$id:blastdb"
+#cat > config.json << EOF
+#{
+#"project":"IU-GALAXY",
+#"user":"$user",
+#"input":"$query",
+#"db":"$dbpath",
+#"blast":"$blast",
+#"blast_opts":"$blast_opts"
+#}
+#EOF
+
