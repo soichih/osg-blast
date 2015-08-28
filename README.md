@@ -3,7 +3,7 @@
 ncbi-blast workflow submission script
 
 osg-blast submits a workflow to run blast search on a large input queries against a large blast database. 
-osg-blast is intended to run on Open Science Grid, and on a glidein enabled submit host (such as xd-login.opensciencegrid.org or login.osgconnect.net).
+osg-blast is intended to run on Open Science Grid, and on a glidein enabled submit host (such as xd-login.opensciencegrid.org or login.osgconnect.net). It also requires access to local job execution on the submit node itself - for blast jobs that can not be executed on OSG sites due to high resource usage.
 
 # Installing blast from ncbi
 
