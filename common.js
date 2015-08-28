@@ -4,6 +4,7 @@ var fs = require('fs');
 var argv = require('optimist').argv;
 var http = require('http');
 
+//TODO - I think I should try using stream2/split/through2, etc..
 function readfastas(file, num, cb) {
     var fastas = [];
     async.whilst(
@@ -137,24 +138,24 @@ function load_config(cb) {
         config._db_name = dbtokens.pop(); //grab last 
         config._user_dbpath = dbtokens.join(":");
 
-        console.log("outputting user db config again");
+        //console.log("outputting user db config again");
         //console.dir(config);
 
         //try downloading pal
         var apath = config._user_dbpath+"/"+config._db_name;
-        console.log("trying to download "+apath+".pal");
+        //console.log("trying to download "+apath+".pal");
         http_get(apath+".pal", function(err, data) {
             if(data) {
-                config.dbinfo = load_db_(data);
+                config.dbinfo = load_db_info(data);
                 cb(null, config);
             } else {
-                console.log("trying to download "+apath+".nal");
+                //console.log("trying to download "+apath+".nal");
                 http_get(apath+".nal", function(err, data) {
                     if(data) {
                         config.dbinfo = load_db_info(data);
                         cb(null, config);
                     } else {
-                        console.log("it must be a single db");
+                        //console.log("it must be a single db");
                         //single part db
                         config.dbinfo = {
                             title: config._db_name, //TODO - pull real name from db somehow?

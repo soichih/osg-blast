@@ -5,9 +5,6 @@ if [ -d input ]; then
     exit 1
 fi
 
-#TODO - prevent job from running if there is another one already running?
-
-
 echo "Running Test"
 mkdir -p test-output
 osg-blast-test --config config.json --out stats.json --outdir test-output
@@ -34,9 +31,14 @@ fi
 echo "Submitting dag"
 mkdir log
 mkdir output
-condor_submit_dag blast.dag
 
-echo "waiting for workflow to finish"
+#http://research.cs.wisc.edu/htcondor/manual/v7.6/3_3Configuration.html
+#export _CONDOR_DAGMAN_MAX_JOBS_SUBMITTED=5 #submission 5 nodes at a time(too small?)
+export _CONDOR_DAGMAN_MAX_JOBS_IDLE=50000 #limit at 50k jobs submissed
+export _CONDOR_DAGMAN_MAX_JOB_HOLDS=0 #prevent dag from removing node if there are more than 100 processes held in a node
+condor_submit_dag -f blast.dag
+
+echo "waiting for workflow to finish.. you can kill this script anytime without aborting your workflow"
 sleep 10 #is 10 seconds enough?
 condor_wait blast.dag.dagman.log
 if [ $? -ne 0 ]; then
@@ -45,13 +47,9 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "checking for output"
-osg-blast-checkoutput --config config.json --input input --outdir output
+osg-blast-checkoutput --config config.json --indir input --outdir output
 if [ $? -ne 0 ]; then
-    echo "incomplete output.. workflow failed with pertial output"
+    echo "incomplete output.. skipping merge"
     exit 1
 fi
-
-echo "TODO - run merge step"
-
-
 

@@ -35,17 +35,32 @@ common.load_config(function(err, config) {
 
         var failed = false;
 
+        var counts = {
+            total: input_queries.length * config.dbinfo.parts.length,
+            submitted: 0,
+            finished: 0
+        };
+
         for(var qid = 0;qid < input_queries.length;qid++) {
             config.dbinfo.parts.forEach(function(part) {
                 var output = argv.outdir+'/'+part+".q."+qid+'.gz';
                 if(!fs.existsSync(output)) {
                     failed = true;
-                    console.log("MISSING:"+output);
+                    if(argv.debug) console.log("MISSING:"+output);
+                } else {
+                    var stats = fs.statSync(output);
+                    if(stats.size == 0) {
+                        if(argv.debug) console.log("EMPTY(submitted):"+output);
+                        counts.submitted++;
+                    } else {
+                        counts.finished++;
+                    }
                 }
             });
         }
+        console.log(JSON.stringify(counts, null, 4));
         if(failed) {
-            console.log("detected missing output");
+            if(argv.debug) console.log("detected missing output");
             process.exit(1);
         }
     });

@@ -34,26 +34,23 @@ function construct_submit(config, env, query_blocks) {
     submit += "output=log/stdout.$(dbname).q.$(process).$(cluster).txt\n";
     submit += "error=log/stderr.$(dbname).q.$(process).$(cluster).txt\n";
     submit += "transfer_input_files="+blastpath+","+argv.input+"/query.$(process).fa\n";
-    submit += "transfer_output_files="+argv.outdir+"\n";
+    submit += "transfer_output_files="+argv.outdir+"/$(dbname).q.$(process).gz\n";
+    submit += "transfer_output_remaps=\"$(dbname).q.$(process).gz=output/$(dbname).q.$(process).gz\"\n";
     submit += "environment=\""+env_str+"\"\n";
+    submit += "on_exit_hold = (ExitBySignal == True) || (ExitCode != 0)\n";
+
+    //gives 4 tries on OSG node, and 2 tries on xd-login node (combined with our requirement)
+    submit += "+RunOnSubmitNode = MY.NumJobStarts > 3\n";
+    submit += "periodic_release = ((CurrentTime - EnteredCurrentStatus) > 60) && (NumJobStarts <= 5)\n";
+
     submit += "+Description=\"blast job on $(dbname) with query.$(process)\"\n";
-
-    //submit += "periodic_hold=(JobStatus == 1 && (CurrentTime - EnteredCurrentStatus) > 7200) || (JobStatus == 2 && (CurrentTime - EnteredCurrentStatus) > 2400)\n";
-    //submit += "periodic_hold_reason=\"test job should timeout in 40 minutes\"\n";
-
-    //automatically release held jobs if it wasn't held by user 
-    //https://twiki.grid.iu.edu/bin/view/Documentation/CondorGToGlidein
-    //for HoldReasonCode, see http://research.cs.wisc.edu/htcondor/manual/v7.8/11_Appendix_A.html
-    submit += "PeriodicRelease = ((CurrentTime - EnteredCurrentStatus) > 60) && (HoldReasonCode =!= 1) && (NumJobStarts <= 10) \n";
-
-    //TODO I don't want DAG to terminate.. how can I do that?
-    submit += "periodic_remove = (NumJobStarts > 10) \n"; 
 
     submit += "Requirements="+config.condor.Requirements+"\n";
     submit += "+PortalUser=\""+config.user+"\"\n";
     submit += "+ProjectName=\""+config.project+"\"\n";
     submit += "request_memory=2000\n"; //2g
     submit += "request_disk=5240000\n"; //5g should be more than enough
+
     //submit += "log_xml=True\n";
 
     submit += "\nqueue "+query_blocks+"\n";
@@ -86,8 +83,8 @@ function construct_submit_merge6(config, query_blocks) {
     //automatically release held jobs if it wasn't held by user 
     //https://twiki.grid.iu.edu/bin/view/Documentation/CondorGToGlidein
     //for HoldReasonCode, see http://research.cs.wisc.edu/htcondor/manual/v7.8/11_Appendix_A.html
-    submit += "PeriodicRelease = ((CurrentTime - EnteredCurrentStatus) > 60) && (HoldReasonCode =!= 1) && (NumJobStarts <= 3) \n";
-    submit += "periodic_remove = (NumJobStarts > 3) \n"; 
+    //submit += "periodic_release = ((CurrentTime - EnteredCurrentStatus) > 60) && (HoldReasonCode =!= 1) && (NumJobStarts <= 3) \n";
+    //submit += "periodic_remove = (NumJobStarts > 3) \n"; 
 
     //Mat's trick to run the job on local job slots
     submit += "requirements = FileSystemDomain =?= \"xd-login.opensciencegrid.org\"\n";
@@ -116,7 +113,7 @@ function construct_dag(config) {
         //RETRY retires entire db block - even if only 1 query block fails. 
         //we have periodicrelease to retry each query block, and retry via dag just resubmits the entnre db block
         //what we really need is to keep other db block running if 1 node fails, but how?
-        dag += "RETRY "+part+" 3\n"; 
+        //dag += "RETRY "+part+" 3\n"; 
 
         dag += "\n";
     }); 
@@ -145,6 +142,11 @@ common.load_config(function(err, config) {
             });
         }
 
+        //mats: when job starts is less or equal to 3, the job can go anywhere. 
+        //Once that part is false, the job has to go to xd-login. The FileSystemDomain is just an attribute we can use to match against xd-login.
+        if(config.condor.Requirements != "") config.condor.Requirements += " && ";
+        config.condor.Requirements += "(isUndefined(MY.NumJobStarts) || MY.NumJobStarts <= 3 || TARGET.FileSystemDomain =?= \"xd-login.opensciencegrid.org\")";
+ 
         //store submit file
         var env = common.construct_env(config);
         var submit = construct_submit(config, env, query_blocks);

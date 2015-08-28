@@ -5,7 +5,7 @@
 # This script gets executed on each osg site to run blast
 #
 
-echo "running on hostname:" `hostname`
+echo $OSG_SITE_NAME $OSG_HOSTNAME
 env | sort
 
 if [ $oasis_dbpath ]; then
@@ -30,7 +30,7 @@ if [ $oasis_dbpath ]; then
     mkdir blastdb
     date +%c
     echo "un-tarring blast db from $oasis_dbpath/$dbname.tar.gz to ./blastdb/"
-    (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
+    time (cd blastdb && tar -xzf $oasis_dbpath/$dbname.tar.gz)
     echo "done"
     date +%c
 
@@ -109,7 +109,6 @@ ls -lart blastdb
 #echo "head of $inputquery"
 #head -20 $inputquery
 
-echo "running blast"
 #-outfmt 5 : xml
 #-outfmt 6 : tabular
 #-outfmt 7 : tabular (with comments)
@@ -119,21 +118,22 @@ echo "running blast"
 export BLASTDB=blastdb
 mkdir $outdir
 
+#$blast_opts could contains multiple token, and some token might be quoted.
+#the only way to make bash not clobber this is to write out to another file and executing the file...
 echo -n "./$blast -query $inputquery -db $dbname -out $outdir/$outputname $blast_opts" > cmd.sh
 if [ $dbsize ]; then
     echo -n " -dbsize $dbsize" >> cmd.sh
 fi
 
-echo "running blast"
 cat cmd.sh
 chmod +x cmd.sh
 time ./cmd.sh
 blast_ret=$?
 
 echo "blast returned code: $blast_ret"
-ls -la
+ls -lart
+ls -lart output
 
-#report return code
 case $blast_ret in
 0)
     echo "zipping output"
@@ -148,62 +148,64 @@ case $blast_ret in
     #    echo "all good"
     #    exit 0
     #fi
-    exit 0
+    #exit 0
     ;;
 1)
     echo "Error in query sequence(s) or BLAST options"
-    exit 1 #input error
+    #exit 1 #input error
     ;;
 2)
     echo "Error in blast database"
-    exit 1 #input error
+    #exit 1 #input error
     ;;
 3)
     echo "Error in blast engine"
-    exit 12
+    #exit 12
     ;;
 4)
     echo "out of memory"
-    exit 2
+    #exit 2
     ;;
 126)
     echo "blast binary can't be executed"
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 127)
     echo "no blast binary"
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 128)
     #I don't know what this is 
     echo "invalid argument to exit"
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 135)
     echo "probably killed by SIGEMT (128+7).. probably terminated with a core dump."
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 137)
     echo "probably killed by SIGKILL(128+9).. out of memory / preemption / etc.."
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 139)
     echo "blast segfaulted"
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 143)
     echo "probably killed by SIGTERM(128+14).."
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 255)
     echo "NCBI C++ Exception?"
-    exit 13
+    #exit 13
     ;;
 *)
     echo "unknown error code: $blast_ret"
-    exit $blast_ret
+    #exit $blast_ret
     ;;
 esac
+
+exit $blast_ret
 
 #http://unixhelp.ed.ac.uk/CGI/man-cgi?signal+7
 #       Signal     Value     Action   Comment
@@ -229,53 +231,3 @@ esac
 #       SIGTTIN   21,21,26    Stop    tty input for background process
 #       SIGTTOU   22,22,27    Stop    tty output for background process
 
-#return code
-# 0 - job complete
-# 1 - input error 
-# 2 - out of memory
-# 12 - error in blast engine
-# 13 - NCBI C++ Exception
-# 15 - squid failurer
-# 16 - failed to untar oasis tar.gz
-# 17 - failed to untar irod tar.gz
-# 18 - failed to untar user tar.gz
-# >125 - blast executable signal
-
-#RETURN CODE ---------------------------------------------------------------
-#
-#0 - job completed successfully
-#
-#1 - 63 (job specific return codes)
-#    (common job specific return codes)
-#
-#    //1 - 9 usuallly indicates permanent error (should abort the workflow)
-#    1 - issue with input file (or blast db) (job will fail everywhere)
-#    2 - resource(memory?) error (job will fail everywhere)
-#    3 - parameter is wrong (or dbname is wrong)
-#    9 - unknown error from the executable
-#
-#    //10 - 19 usually indicates site error (should retry)
-#    10 - failed to load input (should retry)
-#    11 - produced invalid output (should retry)
-#    12 - executable missing or failed to run (should retry)
-#    13 - program crashed due to some kind of bug (ncbi c++ exception)
-#    14 - blast segfaulted
-#    15 - squid server not working (should report to GOC)
-#    16 - failed to download db
-#
-#64 - failed to download node/npm
-#65 - failed to install osg node package
-#66 - timeout (as specified in osg submit option.timeout)
-#67 - run.js failed to spawn requested executable (osg submit option.run)
-#68 - failed to access oasis
-#    
-#130 - sigint (ctrl+c - ed)
-#137 - sigkill (kill -9 <pid>)-ed)
-#147 - sigterm (normal kill <pid>)
-#
-
-#HOLD SUBCODE ---------------------------------------------------------------
-#
-#1 - timeout
-
-exit $blast_ret
