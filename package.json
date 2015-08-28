@@ -1,13 +1,14 @@
 {
   "name": "osg-blast",
-  "version": "3.0.4",
+  "version": "3.0.5",
   "description": "blast submition scripts for open science grid",
   "bin": {
     "osg-blast-test": "./bin/osg-blast-test",
     "osg-blast-split": "./bin/osg-blast-split",
     "osg-blast-gendag": "./bin/osg-blast-gendag",
     "osg-blast-merge5": "./bin/osg-blast-merge5",
-    "osg-blast-merge6": "./bin/osg-blast-merge6"
+    "osg-blast-merge6": "./bin/osg-blast-merge6",
+    "osg-blast-pubdb": "./bin/osg-blast-pubdb"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
