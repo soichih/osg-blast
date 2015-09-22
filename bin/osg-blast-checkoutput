@@ -37,28 +37,43 @@ common.load_config(function(err, config) {
 
         var counts = {
             total: input_queries.length * config.dbinfo.parts.length,
-            submitted: 0,
-            finished: 0
+            waiting: 0,
+            queued: 0,
+            finished: 0,
         };
 
         for(var qid = 0;qid < input_queries.length;qid++) {
             config.dbinfo.parts.forEach(function(part) {
                 var output = argv.outdir+'/'+part+".q."+qid+'.gz';
+                var finished = false;
                 if(!fs.existsSync(output)) {
                     failed = true;
                     if(argv.debug) console.log("MISSING:"+output);
+                    counts.waiting++;
+
                 } else {
                     var stats = fs.statSync(output);
                     if(stats.size == 0) {
                         if(argv.debug) console.log("EMPTY(submitted):"+output);
-                        counts.submitted++;
+                        counts.queued++;
                     } else {
                         counts.finished++;
+                        finished = true;
                     }
+                }
+
+                //for each missing output, dump blast command line that can be submitted manually
+                //intended to be executed in PCP environemt on bigred2 (https://kb.iu.edu/d/bdka)
+                if(!finished && argv.list) {
+                    //blastp -max_target_seqs 1 -outfmt 6 -query input/query.5179.fa -out output/blastdb.23.q.5719 -db blastdb.23 -dbsize 7039355496
+                    console.log(config.blast+" "+config.blast_opts+" -query input/query."+qid+".fa -out output/"+part+".q."+qid+" -db "+part+" -dbsize "+argv.dbsize+" > log/stdout."+part+".q."+qid+".txt");
                 }
             });
         }
+
+        counts.finished_per = counts.finished / counts.total;
         console.log(JSON.stringify(counts, null, 4));
+
         if(failed) {
             if(argv.debug) console.log("detected missing output");
             process.exit(1);
