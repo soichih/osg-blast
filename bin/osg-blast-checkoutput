@@ -66,7 +66,8 @@ common.load_config(function(err, config) {
                 //intended to be executed in PCP environemt on bigred2 (https://kb.iu.edu/d/bdka)
                 if(!finished && argv.list) {
                     //blastp -max_target_seqs 1 -outfmt 6 -query input/query.5179.fa -out output/blastdb.23.q.5719 -db blastdb.23 -dbsize 7039355496
-                    console.log(config.blast+" "+config.blast_opts+" -query input/query."+qid+".fa -out output/"+part+".q."+qid+" -db "+part+" -dbsize "+argv.dbsize+" > log/stdout."+part+".q."+qid+".txt");
+                    var outfile="output/"+part+".q."+qid
+                    console.log(config.blast+" "+config.blast_opts+" -query input/query."+qid+".fa -out "+outfile+" -db blastdb/"+part+" -dbsize "+argv.dbsize+" > log/stdout."+part+".q."+qid+".txt && gzip "+outfile);
                 }
             });
         }
